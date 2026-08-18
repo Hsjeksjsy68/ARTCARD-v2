@@ -1,5 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Grid3X3, WalletCards, RefreshCw, Flame, DollarSign, ArrowUpDown, SlidersHorizontal, Sparkles, X, ChevronRight, Trophy, Heart, ShoppingCart, Award, Medal, Users } from 'lucide-react';
+import { 
+  Search, 
+  Grid3X3, 
+  WalletCards, 
+  RefreshCw, 
+  Flame, 
+  DollarSign, 
+  ArrowUpDown, 
+  SlidersHorizontal, 
+  Sparkles, 
+  X, 
+  ChevronRight, 
+  ChevronDown, 
+  Trophy, 
+  Heart, 
+  ShoppingCart, 
+  Award, 
+  Medal, 
+  Users, 
+  Menu, 
+  Filter, 
+  Plus, 
+  Tag, 
+  ShoppingBag,
+  Layers,
+  Check,
+  Shield,
+  Palette
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cardsDatabase } from './data';
 import { CardItem } from './components/CardItem';
 import { CardPreviewPage } from './components/CardPreviewPage';
@@ -31,6 +60,10 @@ export default function App() {
   const [pricePreset, setPricePreset] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'default' | 'price-asc' | 'price-desc' | 'year-desc' | 'year-asc' | 'player-asc'>('default');
   
+  // Mobile drawer & filter tray states
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isFilterTrayOpen, setIsFilterTrayOpen] = useState(false);
+
   // Public profile modal viewing target
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
 
@@ -272,11 +305,13 @@ export default function App() {
 
   const switchTab = (tab: 'database' | 'vault' | 'favorites' | 'marketplace' | 'leaderboard' | 'admin' | 'manage' | 'shop' | 'custom' | 'profile' | 'collection') => {
     setSelectedCard(null);
+    setIsMobileMenuOpen(false);
     if (tab === 'collection') {
       setActiveTab('vault');
     } else {
       setActiveTab(tab as any);
     }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleResetFilters = () => {
@@ -381,96 +416,120 @@ export default function App() {
   const uniqueRarities = Array.from(new Set(cards.map(c => c.rarity).filter(Boolean))).sort();
   const uniqueEditions = Array.from(new Set(cards.map(c => c.edition).filter(Boolean))).sort();
 
-  const hasActiveFilters = searchQuery !== '' || filterTeam !== '' || filterPosition !== '' || filterRarity !== '' || filterEdition !== '' || minPrice !== '' || maxPrice !== '' || pricePreset !== 'all' || sortBy !== 'default';
+  const activeFiltersCount = (searchQuery ? 1 : 0) + 
+    (filterTeam ? 1 : 0) + 
+    (filterPosition ? 1 : 0) + 
+    (filterRarity ? 1 : 0) + 
+    (filterEdition ? 1 : 0) + 
+    (minPrice !== '' || maxPrice !== '' || pricePreset !== 'all' ? 1 : 0) + 
+    (sortBy !== 'default' ? 1 : 0);
+
+  const hasActiveFilters = activeFiltersCount > 0;
+  const isAdminUser = user?.email === 'grakibg@gmail.com' || user?.email === 'wwwrakibcom071@gmail.com' || user?.email === '1@1.com';
 
   return (
-    <div className="min-h-screen bg-white text-black flex flex-col font-sans uppercase overflow-hidden selection:bg-[#D4FF00] selection:text-black">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white border-b-2 border-black">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-8 lg:gap-12">
-            <h1 
+    <div className="min-h-screen bg-white text-black flex flex-col font-sans uppercase selection:bg-[#D4FF00] selection:text-black">
+      {/* Header (Responsive for PC & Phone) */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b-2 border-black">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-2">
+          
+          {/* Logo & Desktop Nav */}
+          <div className="flex items-center gap-3 lg:gap-8 min-w-0">
+            <div 
               onClick={() => switchTab('database')}
-              className="text-3xl font-black tracking-tighter text-black uppercase cursor-pointer hover:text-[#556b00] transition-colors"
+              className="flex items-center gap-1.5 cursor-pointer group shrink-0"
             >
-              ARTCARD
-            </h1>
+              <div className="w-8 h-8 bg-black text-[#D4FF00] border-2 border-black flex items-center justify-center font-black text-sm group-hover:bg-[#D4FF00] group-hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                AC
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xl sm:text-2xl font-black tracking-tighter text-black uppercase leading-none group-hover:text-neutral-700 transition-colors">
+                  ARTCARD
+                </span>
+                <span className="hidden sm:inline-block text-[8px] font-black tracking-widest text-neutral-500 uppercase mt-0.5">
+                  COLLECTIVE HUB
+                </span>
+              </div>
+            </div>
             
-            <nav className="hidden md:flex gap-4 lg:gap-6 text-sm font-black tracking-widest text-neutral-500 uppercase mt-1">
+            {/* Desktop Navigation Links */}
+            <nav className="hidden lg:flex items-center gap-1 xl:gap-2 text-xs font-black tracking-wider text-neutral-600 uppercase">
               <button 
                 onClick={() => switchTab('database')}
-                className={`transition-colors py-2 border-b-4 ${
-                  activeTab === 'database' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
+                className={`px-3 py-2 border-b-2 transition-all ${
+                  activeTab === 'database' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
                 }`}
               >
                 DATABASE
               </button>
               <button 
                 onClick={() => switchTab('marketplace')}
-                className={`transition-colors py-2 border-b-4 flex items-center gap-1.5 ${
-                  activeTab === 'marketplace' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
+                className={`px-3 py-2 border-b-2 flex items-center gap-1.5 transition-all ${
+                  activeTab === 'marketplace' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
                 }`}
               >
-                <ShoppingCart size={14} className="text-black" />
-                MARKETPLACE
+                <ShoppingCart size={13} />
+                MARKET
               </button>
               <button 
                 onClick={() => switchTab('vault')}
-                className={`transition-colors py-2 border-b-4 flex items-center gap-1.5 ${
-                  activeTab === 'vault' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
+                className={`px-3 py-2 border-b-2 flex items-center gap-1.5 transition-all ${
+                  activeTab === 'vault' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
                 }`}
               >
-                <Trophy size={14} className="text-black" />
+                <Trophy size={13} />
                 VAULT ({vaultIds.size})
               </button>
               <button 
                 onClick={() => switchTab('leaderboard')}
-                className={`transition-colors py-2 border-b-4 flex items-center gap-1.5 ${
-                  activeTab === 'leaderboard' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
+                className={`px-3 py-2 border-b-2 flex items-center gap-1.5 transition-all ${
+                  activeTab === 'leaderboard' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
                 }`}
               >
-                <Medal size={14} className="text-black" />
+                <Medal size={13} />
                 LEADERBOARD
               </button>
               <button 
-                onClick={() => switchTab('favorites')}
-                className={`transition-colors py-2 border-b-4 flex items-center gap-1.5 ${
-                  activeTab === 'favorites' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
-                }`}
-              >
-                <Heart size={14} className="text-red-500 fill-red-500" />
-                FAVORITES ({favoriteIds.size})
-              </button>
-              <button 
                 onClick={() => switchTab('shop')}
-                className={`transition-colors py-2 border-b-4 ${
-                  activeTab === 'shop' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
+                className={`px-3 py-2 border-b-2 flex items-center gap-1.5 transition-all ${
+                  activeTab === 'shop' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
                 }`}
               >
+                <Sparkles size={13} />
                 SHOP
               </button>
               <button 
                 onClick={() => switchTab('custom')}
-                className={`transition-colors py-2 border-b-4 ${
-                  activeTab === 'custom' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
+                className={`px-3 py-2 border-b-2 flex items-center gap-1.5 transition-all ${
+                  activeTab === 'custom' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
                 }`}
               >
+                <Palette size={13} />
                 CUSTOM
               </button>
-              {(user?.email === 'grakibg@gmail.com' || user?.email === 'wwwrakibcom071@gmail.com' || user?.email === '1@1.com') && (
+              <button 
+                onClick={() => switchTab('favorites')}
+                className={`px-3 py-2 border-b-2 flex items-center gap-1.5 transition-all ${
+                  activeTab === 'favorites' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
+                }`}
+              >
+                <Heart size={13} className={favoriteIds.size > 0 ? "text-red-500 fill-red-500" : "text-neutral-400"} />
+                FAVS ({favoriteIds.size})
+              </button>
+              {isAdminUser && (
                 <>
                   <button 
                     onClick={() => switchTab('admin')}
-                    className={`transition-colors py-2 border-b-4 ${
-                      activeTab === 'admin' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
+                    className={`px-2.5 py-1.5 text-[11px] font-black border border-black transition-all ${
+                      activeTab === 'admin' && !selectedCard ? 'bg-[#D4FF00] text-black' : 'bg-neutral-100 hover:bg-neutral-200'
                     }`}
                   >
-                    ADD CARD
+                    + ADD CARD
                   </button>
                   <button 
                     onClick={() => switchTab('manage')}
-                    className={`transition-colors py-2 border-b-4 ${
-                      activeTab === 'manage' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
+                    className={`px-2.5 py-1.5 text-[11px] font-black border border-black transition-all ${
+                      activeTab === 'manage' && !selectedCard ? 'bg-[#D4FF00] text-black' : 'bg-neutral-100 hover:bg-neutral-200'
                     }`}
                   >
                     MANAGE
@@ -480,7 +539,8 @@ export default function App() {
             </nav>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-6">
+          {/* Right Header: Wallet Balance, Portfolio & User Profile */}
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             {/* Wallet Quick Balance & Top-Up Button */}
             <button
               onClick={() => {
@@ -490,21 +550,34 @@ export default function App() {
                   setIsWalletOpen(true);
                 }
               }}
-              className="flex items-center gap-1.5 sm:gap-2 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-2.5 sm:px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+              className="flex items-center gap-1 sm:gap-2 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5"
+              title="Click to manage ARTCOIN wallet balance"
             >
-              <DollarSign size={14} strokeWidth={3} />
+              <DollarSign size={13} strokeWidth={3} className="shrink-0" />
               <span>{user ? formatCurrency(walletBalance) : 'TOP UP ৳'}</span>
             </button>
 
-            <div className="hidden lg:flex flex-col items-end mr-1">
-              <span className="text-[10px] text-neutral-500 uppercase tracking-widest font-black mb-0.5">Vault Portfolio</span>
-              <span className="text-xs font-black text-black bg-neutral-100 px-2.5 py-0.5 border border-black">{formatCurrency(vaultValue)}</span>
+            {/* Vault Portfolio (Desktop only) */}
+            <div className="hidden xl:flex flex-col items-end">
+              <span className="text-[9px] text-neutral-500 uppercase tracking-widest font-black leading-none mb-0.5">Vault Value</span>
+              <span className="text-xs font-black text-black bg-neutral-100 px-2 py-0.5 border border-black">{formatCurrency(vaultValue)}</span>
             </div>
+
+            {/* Profile Avatar / Auth */}
             <UserAuth 
               user={user} 
               onOpenProfile={() => switchTab('profile')} 
               isProfileActive={activeTab === 'profile' && !selectedCard} 
             />
+
+            {/* Mobile Menu Hamburger Button */}
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden p-2 border-2 border-black bg-white hover:bg-neutral-100 text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5"
+              title="Open Navigation Menu"
+            >
+              <Menu size={18} />
+            </button>
           </div>
 
         </div>
