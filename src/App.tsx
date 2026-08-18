@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Grid3X3, WalletCards, RefreshCw, Flame, DollarSign, ArrowUpDown, SlidersHorizontal, Sparkles, X, ChevronRight, Trophy, Heart } from 'lucide-react';
+import { Search, Grid3X3, WalletCards, RefreshCw, Flame, DollarSign, ArrowUpDown, SlidersHorizontal, Sparkles, X, ChevronRight, Trophy, Heart, ShoppingCart, Award, Medal, Users } from 'lucide-react';
 import { cardsDatabase } from './data';
 import { CardItem } from './components/CardItem';
 import { CardPreviewPage } from './components/CardPreviewPage';
@@ -10,12 +10,15 @@ import { UserAuth } from './components/UserAuth';
 import { CustomCard } from './components/CustomCard';
 import { UserProfile } from './components/UserProfile';
 import { WalletModal } from './components/WalletModal';
+import { Marketplace } from './components/Marketplace';
+import { LeaderboardAndEvents } from './components/LeaderboardAndEvents';
+import { PublicProfileModal } from './components/PublicProfileModal';
 import { FootballCard, Pack } from './types';
 import { formatCurrency, getDefaultStock } from './lib/utils';
 import { db, auth, onAuthStateChanged, collection, doc, setDoc, getDoc, User, deleteDoc, onSnapshot, getDocs, increment, updateDoc, addDoc } from './lib/firebase';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'database' | 'vault' | 'favorites' | 'admin' | 'manage' | 'shop' | 'custom' | 'profile'>('database');
+  const [activeTab, setActiveTab] = useState<'database' | 'vault' | 'favorites' | 'marketplace' | 'leaderboard' | 'admin' | 'manage' | 'shop' | 'custom' | 'profile'>('database');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTeam, setFilterTeam] = useState('');
   const [filterPosition, setFilterPosition] = useState('');
@@ -26,10 +29,10 @@ export default function App() {
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
   const [pricePreset, setPricePreset] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'default' | 'most-searched' | 'price-asc' | 'price-desc' | 'year-desc' | 'year-asc' | 'player-asc'>('default');
+  const [sortBy, setSortBy] = useState<'default' | 'price-asc' | 'price-desc' | 'year-desc' | 'year-asc' | 'player-asc'>('default');
   
-  // Search counts from Firestore
-  const [searchCounts, setSearchCounts] = useState<Record<string, number>>({});
+  // Public profile modal viewing target
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null);
 
   const [selectedCard, setSelectedCard] = useState<FootballCard | null>(null);
   
@@ -112,60 +115,12 @@ export default function App() {
       console.error("Error fetching themes:", error);
     });
 
-    // Real-time listener for search tracking
-    const searchesRef = collection(db, 'searches');
-    const unsubscribeSearches = onSnapshot(searchesRef, (snapshot) => {
-      const counts: Record<string, number> = {};
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        counts[docSnap.id] = data.count || 0;
-      });
-      setSearchCounts(counts);
-    }, (error) => {
-      console.error("Error fetching searches:", error);
-    });
-
     return () => {
       unsubscribeCards();
       unsubscribePacks();
       unsubscribeThemes();
-      unsubscribeSearches();
     };
   }, []);
-
-  // Helper to record search / view count for a card
-  const recordCardSearch = async (cardId: string) => {
-    if (!cardId) return;
-    try {
-      const searchRef = doc(db, 'searches', cardId);
-      await setDoc(searchRef, {
-        cardId,
-        count: increment(1),
-        lastSearchedAt: Date.now()
-      }, { merge: true });
-    } catch (e) {
-      console.warn("Search record error:", e);
-    }
-  };
-
-  // Debounced search tracking when user searches in input
-  useEffect(() => {
-    if (!searchQuery || searchQuery.trim().length < 2) return;
-    const timer = setTimeout(() => {
-      const q = searchQuery.toLowerCase().trim();
-      const matched = cards.filter(c => {
-        if (!c.imageUrl) return false;
-        return (c.player || '').toLowerCase().includes(q) ||
-               (c.team || '').toLowerCase().includes(q) ||
-               (c.set || '').toLowerCase().includes(q);
-      });
-      // Increment count for up to top 3 matching cards
-      matched.slice(0, 3).forEach(card => {
-        recordCardSearch(card.id);
-      });
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, [searchQuery, cards]);
 
   const [toastMessage, setToastMessage] = useState('');
 
@@ -273,9 +228,9 @@ export default function App() {
       }, { merge: true });
 
       // 2. Decrement stock from database
-      await updateDoc(cardRef, {
-        stock: increment(-1)
-      });
+      await setDoc(cardRef, {
+        stock: Math.max(0, currentStock - 1)
+      }, { merge: true });
 
       // 3. Record transaction
       const txRef = collection(db, 'transactions');
@@ -312,11 +267,10 @@ export default function App() {
   };
 
   const handleSelectCard = (card: FootballCard) => {
-    recordCardSearch(card.id);
     setSelectedCard(card);
   };
 
-  const switchTab = (tab: 'database' | 'vault' | 'favorites' | 'admin' | 'manage' | 'shop' | 'custom' | 'profile' | 'collection') => {
+  const switchTab = (tab: 'database' | 'vault' | 'favorites' | 'marketplace' | 'leaderboard' | 'admin' | 'manage' | 'shop' | 'custom' | 'profile' | 'collection') => {
     setSelectedCard(null);
     if (tab === 'collection') {
       setActiveTab('vault');
@@ -337,14 +291,8 @@ export default function App() {
     setSortBy('default');
   };
 
-  // Merge cards with real-time searchCounts
-  const cardsWithStats = cards.map(card => ({
-    ...card,
-    searchCount: searchCounts[card.id] || 0
-  }));
-
   // Filtering cards
-  const filteredCards = cardsWithStats.filter(card => {
+  const filteredCards = cards.filter(card => {
     if (!card.imageUrl) return false;
     
     const player = card.player || '';
@@ -402,9 +350,6 @@ export default function App() {
 
   // Sorting cards
   const sortedCards = [...filteredCards].sort((a, b) => {
-    if (sortBy === 'most-searched') {
-      return (b.searchCount || 0) - (a.searchCount || 0);
-    }
     if (sortBy === 'price-asc') {
       return a.currentPrice - b.currentPrice;
     }
@@ -422,12 +367,6 @@ export default function App() {
     }
     return 0;
   });
-
-  // Top Most Searched Cards for the Trending Shelf in the feed
-  const topSearchedCards = [...cardsWithStats]
-    .filter(c => !!c.imageUrl && (c.searchCount || 0) > 0)
-    .sort((a, b) => (b.searchCount || 0) - (a.searchCount || 0))
-    .slice(0, 6);
 
   let vaultValue = 0;
   vaultIds.forEach(id => {
@@ -457,7 +396,7 @@ export default function App() {
               ARTCARD
             </h1>
             
-            <nav className="hidden md:flex gap-6 lg:gap-8 text-sm font-black tracking-widest text-neutral-500 uppercase mt-1">
+            <nav className="hidden md:flex gap-4 lg:gap-6 text-sm font-black tracking-widest text-neutral-500 uppercase mt-1">
               <button 
                 onClick={() => switchTab('database')}
                 className={`transition-colors py-2 border-b-4 ${
@@ -467,6 +406,15 @@ export default function App() {
                 DATABASE
               </button>
               <button 
+                onClick={() => switchTab('marketplace')}
+                className={`transition-colors py-2 border-b-4 flex items-center gap-1.5 ${
+                  activeTab === 'marketplace' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
+                }`}
+              >
+                <ShoppingCart size={14} className="text-black" />
+                MARKETPLACE
+              </button>
+              <button 
                 onClick={() => switchTab('vault')}
                 className={`transition-colors py-2 border-b-4 flex items-center gap-1.5 ${
                   activeTab === 'vault' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
@@ -474,6 +422,15 @@ export default function App() {
               >
                 <Trophy size={14} className="text-black" />
                 VAULT ({vaultIds.size})
+              </button>
+              <button 
+                onClick={() => switchTab('leaderboard')}
+                className={`transition-colors py-2 border-b-4 flex items-center gap-1.5 ${
+                  activeTab === 'leaderboard' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
+                }`}
+              >
+                <Medal size={14} className="text-black" />
+                LEADERBOARD
               </button>
               <button 
                 onClick={() => switchTab('favorites')}
@@ -498,7 +455,7 @@ export default function App() {
                   activeTab === 'custom' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
                 }`}
               >
-                CUSTOM CARD
+                CUSTOM
               </button>
               {(user?.email === 'grakibg@gmail.com' || user?.email === 'wwwrakibcom071@gmail.com' || user?.email === '1@1.com') && (
                 <>
@@ -516,7 +473,7 @@ export default function App() {
                       activeTab === 'manage' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
                     }`}
                   >
-                    MANAGE SHOP
+                    MANAGE
                   </button>
                 </>
               )}
@@ -568,12 +525,28 @@ export default function App() {
               DATABASE
             </button>
             <button 
+              onClick={() => switchTab('marketplace')}
+              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === 'marketplace' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
+              }`}
+            >
+              <ShoppingCart size={14} /> MARKETPLACE
+            </button>
+            <button 
               onClick={() => switchTab('vault')}
               className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap flex items-center gap-1.5 ${
                 activeTab === 'vault' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
               }`}
             >
               <Trophy size={14} /> VAULT ({vaultIds.size})
+            </button>
+            <button 
+              onClick={() => switchTab('leaderboard')}
+              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === 'leaderboard' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
+              }`}
+            >
+              <Medal size={14} /> LEADERBOARD
             </button>
             <button 
               onClick={() => switchTab('favorites')}
@@ -597,7 +570,7 @@ export default function App() {
                 activeTab === 'custom' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
               }`}
             >
-              CUSTOM CARD
+              CUSTOM
             </button>
             {(user?.email === 'grakibg@gmail.com' || user?.email === 'wwwrakibcom071@gmail.com' || user?.email === '1@1.com') && (
               <>
@@ -615,7 +588,7 @@ export default function App() {
                     activeTab === 'manage' && !selectedCard ? 'bg-[#D4FF00] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]' : 'bg-neutral-200 text-black'
                   }`}
                 >
-                  MANAGE SHOP
+                  MANAGE
                 </button>
               </>
             )}
@@ -647,6 +620,30 @@ export default function App() {
             onNavigateTab={(tab) => switchTab(tab)}
             onToggleFavorite={handleToggleFavorite}
           />
+        ) : activeTab === 'marketplace' ? (
+          <Marketplace
+            user={user}
+            walletBalance={walletBalance}
+            allCards={cards}
+            vaultIds={vaultIds}
+            onOpenWallet={() => setIsWalletOpen(true)}
+            onOpenAuth={() => switchTab('profile')}
+            onSelectCard={handleSelectCard}
+            onViewUserProfile={(uid) => setViewingUserId(uid)}
+            onToast={(msg) => setToastMessage(msg)}
+          />
+        ) : activeTab === 'leaderboard' ? (
+          <LeaderboardAndEvents
+            user={user}
+            walletBalance={walletBalance}
+            allCards={cards}
+            vaultIds={vaultIds}
+            onOpenWallet={() => setIsWalletOpen(true)}
+            onOpenAuth={() => switchTab('profile')}
+            onViewUserProfile={(uid) => setViewingUserId(uid)}
+            onSelectCard={handleSelectCard}
+            onToast={(msg) => setToastMessage(msg)}
+          />
         ) : activeTab === 'admin' ? (
           (user?.email === 'grakibg@gmail.com' || user?.email === 'wwwrakibcom071@gmail.com' || user?.email === '1@1.com') ? (
             <div className="max-w-2xl mx-auto space-y-8">
@@ -676,7 +673,6 @@ export default function App() {
             onCardsDrawn={handleCardsDrawn} 
           />
         ) : activeTab === 'custom' ? (
-
           <CustomCard themes={themes} />
         ) : (
           <>
@@ -770,7 +766,6 @@ export default function App() {
                     className="bg-white border-2 border-black p-2 text-xs font-black uppercase tracking-widest focus:outline-none focus:bg-[#D4FF00]"
                   >
                     <option value="default">SORT: DEFAULT</option>
-                    <option value="most-searched">🔥 SORT: MOST SEARCHED</option>
                     <option value="price-asc">PRICE: LOW TO HIGH</option>
                     <option value="price-desc">PRICE: HIGH TO LOW</option>
                     <option value="year-desc">YEAR: NEWEST FIRST</option>
@@ -831,64 +826,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 🔥 Most Searched Cards Showcase Section (Shown in Database tab) */}
-            {activeTab === 'database' && topSearchedCards.length > 0 && (
-              <div className="mb-12 bg-neutral-50 border-2 border-black p-4 sm:p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b-2 border-black">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-black text-[#D4FF00] border-2 border-black">
-                      <Flame size={20} />
-                    </div>
-                    <div>
-                      <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-black flex items-center gap-2">
-                        MOST SEARCHED & VIEWED CARDS
-                      </h2>
-                      <p className="text-[10px] text-neutral-500 font-black uppercase tracking-widest">
-                        REAL-TIME MARKET TRENDS BASED ON COLLECTOR INTEREST
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <button
-                    onClick={() => setSortBy('most-searched')}
-                    className={`shrink-0 px-3 py-1.5 text-xs font-black uppercase tracking-widest border-2 border-black transition-all ${
-                      sortBy === 'most-searched' 
-                        ? 'bg-black text-[#D4FF00] shadow-[2px_2px_0px_0px_#D4FF00]' 
-                        : 'bg-white hover:bg-[#D4FF00] text-black'
-                    }`}
-                  >
-                    VIEW ALL TRENDING →
-                  </button>
-                </div>
-
-                {/* Horizontal Scrolling Trending Shelf */}
-                <div className="flex gap-4 overflow-x-auto pb-3 pt-1 snap-x [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-black">
-                  {topSearchedCards.map((card, index) => (
-                    <div 
-                      key={`top-${card.id}`} 
-                      onClick={() => handleSelectCard(card)}
-                      className="shrink-0 w-36 sm:w-44 bg-white border-2 border-black p-2.5 cursor-pointer hover:border-[#D4FF00] hover:-translate-y-1 transition-all group shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-                    >
-                      <div className="relative aspect-[750/1050] bg-neutral-100 border border-black overflow-hidden mb-2">
-                        <img src={card.imageUrl} alt={card.player} className="w-full h-full object-cover" />
-                        <div className="absolute top-1 left-1 bg-black text-[#D4FF00] text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 border border-black">
-                          #{index + 1} 🔥
-                        </div>
-                      </div>
-                      <div className="text-[9px] text-neutral-500 font-black uppercase truncate">{card.team}</div>
-                      <div className="text-xs sm:text-sm font-black text-black uppercase truncate group-hover:text-[#668000]">{card.player}</div>
-                      <div className="flex items-center justify-between mt-1 text-[10px] font-black">
-                        <span className="text-black">{formatCurrency(card.currentPrice)}</span>
-                        <span className="text-[9px] text-neutral-600 bg-neutral-200 px-1 py-0.2">
-                          {card.searchCount} {card.searchCount === 1 ? 'SEARCH' : 'SEARCHES'}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Tab Header Info */}
             <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between border-b-2 border-black pb-4 gap-4">
               <div>
@@ -906,17 +843,11 @@ export default function App() {
                   )}
                 </h1>
                 <p className="text-neutral-500 mt-2 text-xs font-black uppercase tracking-widest">
-                  {activeTab === 'database' && `SHOWING ${sortedCards.length} OF ${cards.filter(c => !!c.imageUrl).length} CARDS${sortBy === 'most-searched' ? ' • RANKED BY POPULARITY 🔥' : ''}`}
+                  {activeTab === 'database' && `SHOWING ${sortedCards.length} OF ${cards.filter(c => !!c.imageUrl).length} CARDS`}
                   {activeTab === 'vault' && `YOU OWN ${vaultIds.size} CARDS IN YOUR VAULT VALUED AT ${formatCurrency(vaultValue)}.`}
                   {activeTab === 'favorites' && `YOU HAVE SAVED ${favoriteIds.size} FAVORITE CARDS.`}
                 </p>
               </div>
-
-              {sortBy === 'most-searched' && (
-                <div className="bg-black text-[#D4FF00] px-3 py-1.5 text-xs font-black uppercase tracking-widest border-2 border-black flex items-center gap-1.5 self-start sm:self-auto">
-                  <Flame size={14} /> SORTED BY MOST SEARCHED
-                </div>
-              )}
             </div>
 
             {/* Grid */}
@@ -1022,6 +953,15 @@ export default function App() {
         onClose={() => setIsWalletOpen(false)}
         user={user}
         walletBalance={walletBalance}
+      />
+
+      {/* Public Profile View Modal */}
+      <PublicProfileModal
+        userId={viewingUserId}
+        onClose={() => setViewingUserId(null)}
+        allCards={cards}
+        currentUserId={user?.uid}
+        onSelectCard={handleSelectCard}
       />
     </div>
   );

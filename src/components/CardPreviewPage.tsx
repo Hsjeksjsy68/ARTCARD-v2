@@ -297,12 +297,6 @@ export function CardPreviewPage({
                   {card.position}
                 </span>
               </div>
-
-              {card.searchCount && card.searchCount > 0 ? (
-                <span className="bg-[#D4FF00] text-black border border-black px-2.5 py-1 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                  <Flame size={12} className="text-black" /> {card.searchCount} SEARCHES
-                </span>
-              ) : null}
             </div>
 
             <div>

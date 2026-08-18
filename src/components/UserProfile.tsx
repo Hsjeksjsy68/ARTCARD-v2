@@ -339,6 +339,13 @@ export function UserProfile({
             </button>
 
             <button
+              onClick={() => onNavigateTab('marketplace')}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-black text-[#D4FF00] hover:bg-neutral-800 border-2 border-black px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-colors shadow-[3px_3px_0px_0px_#D4FF00]"
+            >
+              <ShoppingCart size={14} /> SELL ON MARKET
+            </button>
+
+            <button
               onClick={handleCopyProfileLink}
               className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white hover:bg-neutral-100 text-black border-2 border-black px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
             >

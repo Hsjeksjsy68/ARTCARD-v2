@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { FootballCard, Pack } from '../types';
 import { PackageOpen, Sparkles, Truck, CreditCard, CheckCircle, Wallet, Info, Plus, Award } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { formatCurrency, drawRandomCards } from '../lib/utils';
+import { formatCurrency, drawRandomCards, getDefaultStock } from '../lib/utils';
 import { PackOpeningModal } from './PackOpeningModal';
 import { db, doc, setDoc, updateDoc, increment, collection, addDoc, User } from '../lib/firebase';
 
@@ -109,12 +109,11 @@ export function PackShop({
 
       // 3. Decrement stock for each drawn card in Firestore
       for (const card of drawn) {
-        if (card.stock !== undefined && card.stock > 0) {
-          const cardRef = doc(db, 'cards', card.id);
-          await updateDoc(cardRef, {
-            stock: increment(-1)
-          }).catch(() => {});
-        }
+        const cardRef = doc(db, 'cards', card.id);
+        const curStock = getDefaultStock(card);
+        await setDoc(cardRef, {
+          stock: Math.max(0, curStock - 1)
+        }, { merge: true }).catch(() => {});
       }
 
       // 4. Log transaction

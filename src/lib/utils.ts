@@ -6,8 +6,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(value: number) {
-  return '৳' + Math.round(Number(value || 0)).toLocaleString('en-US');
+export function formatCurrency(value: number, short = false) {
+  const rounded = Math.round(Number(value || 0)).toLocaleString('en-US');
+  if (short) return `${rounded} AC`;
+  return `${rounded} ARTCOIN`;
 }
 
 export function getDefaultStock(card: Partial<FootballCard>): number {

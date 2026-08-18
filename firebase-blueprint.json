@@ -25,10 +25,40 @@
   "users": {
     "$userId": {
       "email": "string",
+      "displayName": "string",
+      "photoURL": "string",
+      "customAvatar": "string",
+      "bio": "string",
+      "favoriteTeam": "string",
+      "featuredCardId": "string",
+      "joinedAt": "number",
       "collectionIds": ["string"],
       "vaultIds": ["string"],
       "favoriteIds": ["string"],
       "walletBalance": "number"
+    }
+  },
+  "market_listings": {
+    "$listingId": {
+      "cardId": "string",
+      "sellerId": "string",
+      "sellerName": "string",
+      "sellerAvatar": "string",
+      "sellerTeam": "string",
+      "price": "number",
+      "status": "string",
+      "buyerId": "string",
+      "buyerName": "string",
+      "listedAt": "number",
+      "soldAt": "number"
+    }
+  },
+  "events": {
+    "$eventId": {
+      "title": "string",
+      "description": "string",
+      "reward": "number",
+      "expiresAt": "number"
     }
   },
   "transactions": {

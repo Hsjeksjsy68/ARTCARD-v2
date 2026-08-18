@@ -104,14 +104,6 @@ export function CardItem({
               {stock} / {maxSupply} LEFT
             </div>
           )}
-
-          {/* Most Searched Badge */}
-          {card.searchCount !== undefined && card.searchCount > 0 && !isSoldOut && (
-            <div className="bg-black text-[#D4FF00] border border-black px-1.5 py-0.5 text-[7px] sm:text-[8px] font-black uppercase tracking-wider flex items-center gap-0.5">
-              <span>🔥</span>
-              <span>{card.searchCount}</span>
-            </div>
-          )}
         </div>
 
         {card.imageUrl ? (

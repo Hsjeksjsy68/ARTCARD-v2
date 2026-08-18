@@ -83,7 +83,7 @@ export interface WalletTransaction {
   id: string;
   userId: string;
   userEmail?: string;
-  type: 'top_up' | 'buy_card' | 'buy_pack';
+  type: 'top_up' | 'buy_card' | 'buy_pack' | 'market_buy' | 'market_sell' | 'event_reward';
   amount: number;
   description: string;
   cardId?: string;
@@ -91,4 +91,35 @@ export interface WalletTransaction {
   packId?: string;
   packName?: string;
   timestamp: number;
+}
+
+export interface MarketListing {
+  id: string;
+  cardId: string;
+  card: FootballCard;
+  sellerId: string;
+  sellerName: string;
+  sellerAvatar?: string;
+  sellerTeam?: string;
+  price: number; // in ARTCOIN
+  status: 'active' | 'sold' | 'cancelled';
+  buyerId?: string;
+  buyerName?: string;
+  buyerAvatar?: string;
+  listedAt: number;
+  soldAt?: number;
+}
+
+export interface CommunityEvent {
+  id: string;
+  title: string;
+  subtitle: string;
+  category: 'market' | 'collection' | 'packs';
+  description: string;
+  rewardArtcoins: number;
+  badgeName: string;
+  targetCount: number;
+  conditionType: 'market_trade' | 'ucl_cards' | 'shield_owner' | 'vault_value' | 'packs_opened';
+  expiresAt: number;
+  bannerGradient: string;
 }
