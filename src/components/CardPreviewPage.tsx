@@ -24,15 +24,20 @@ import {
   ShoppingCart,
   Wallet,
   AlertCircle,
-  PackageCheck
+  PackageCheck,
+  Heart,
+  Trophy
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface CardPreviewPageProps {
   card: FootballCard;
   allCards: FootballCard[];
-  inCollection: boolean;
-  onToggleCollection: (cardId: string) => void;
+  inCollection?: boolean;
+  inVault?: boolean;
+  isFavorite?: boolean;
+  onToggleCollection?: (cardId: string) => void;
+  onToggleFavorite?: (cardId: string) => void;
   onBack: () => void;
   onSelectRelatedCard: (card: FootballCard) => void;
   userEmail?: string | null;
@@ -45,8 +50,11 @@ interface CardPreviewPageProps {
 export function CardPreviewPage({
   card,
   allCards,
-  inCollection,
+  inCollection = false,
+  inVault,
+  isFavorite = false,
   onToggleCollection,
+  onToggleFavorite,
   onBack,
   onSelectRelatedCard,
   userEmail,
@@ -57,6 +65,15 @@ export function CardPreviewPage({
 }: CardPreviewPageProps) {
   const [copiedLink, setCopiedLink] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+
+  const isOwnedInVault = inVault ?? inCollection;
+  const handleFavoriteClick = () => {
+    if (onToggleFavorite) {
+      onToggleFavorite(card.id);
+    } else if (onToggleCollection) {
+      onToggleCollection(card.id);
+    }
+  };
 
   const stock = getDefaultStock(card);
   const maxSupply = getDefaultMaxSupply(card);
@@ -198,7 +215,7 @@ export function CardPreviewPage({
                     "w-full py-4 px-6 border-2 font-black text-sm tracking-widest uppercase flex items-center justify-center gap-3 transition-all shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]",
                     isSoldOut
                       ? "bg-neutral-200 text-neutral-500 border-neutral-400 cursor-not-allowed"
-                      : inCollection
+                      : isOwnedInVault
                       ? "bg-black text-[#D4FF00] hover:bg-neutral-900 border-black"
                       : canAfford
                       ? "bg-[#D4FF00] text-black border-black hover:bg-black hover:text-[#D4FF00]"
@@ -215,7 +232,7 @@ export function CardPreviewPage({
                       <AlertCircle size={20} />
                       OUT OF STOCK / SOLD OUT
                     </>
-                  ) : inCollection ? (
+                  ) : isOwnedInVault ? (
                     <>
                       <PackageCheck size={20} />
                       BUY ANOTHER COPY ({formatCurrency(card.currentPrice)})
@@ -223,39 +240,46 @@ export function CardPreviewPage({
                   ) : canAfford ? (
                     <>
                       <ShoppingCart size={20} />
-                      BUY DIRECT CARD ({formatCurrency(card.currentPrice)})
+                      BUY CARD TO VAULT ({formatCurrency(card.currentPrice)})
                     </>
                   ) : (
                     <>
                       <Wallet size={20} />
-                      TOP UP & BUY ({formatCurrency(card.currentPrice)})
+                      TOP UP & BUY TO VAULT ({formatCurrency(card.currentPrice)})
                     </>
                   )}
                 </button>
               </div>
             )}
 
-            {/* Quick Toggle Add to Collection Button */}
+            {/* Owned in Vault Status Banner if user owns it */}
+            {isOwnedInVault && (
+              <div className="bg-neutral-100 border-2 border-black p-3 text-center flex items-center justify-center gap-2">
+                <Trophy size={16} className="text-black" />
+                <span className="text-xs font-black text-black uppercase tracking-wider">
+                  🏆 THIS CARD IS STORED IN YOUR VAULT
+                </span>
+              </div>
+            )}
+
+            {/* Favorite / Wishlist Button */}
             <button
-              onClick={() => onToggleCollection(card.id)}
+              onClick={handleFavoriteClick}
               className={cn(
                 "w-full py-3.5 px-6 border-2 font-black text-xs tracking-widest uppercase flex items-center justify-center gap-3 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]",
-                inCollection 
-                  ? "bg-neutral-100 text-black border-black hover:bg-black hover:text-white" 
-                  : "bg-white text-black border-black hover:bg-neutral-100"
+                isFavorite 
+                  ? "bg-white text-red-600 border-black hover:bg-red-50" 
+                  : "bg-white text-black border-black hover:bg-[#D4FF00]"
               )}
             >
-              {inCollection ? (
-                <>
-                  <Check size={16} strokeWidth={3} className="text-emerald-600" />
-                  IN YOUR FAVORITES / VAULT
-                </>
-              ) : (
-                <>
-                  <Plus size={16} strokeWidth={3} />
-                  ADD TO FAVORITES LIST
-                </>
-              )}
+              <Heart 
+                size={16} 
+                className={cn(
+                  "transition-colors",
+                  isFavorite ? "fill-red-500 text-red-500" : "fill-transparent text-black"
+                )} 
+              />
+              {isFavorite ? "SAVED IN YOUR FAVORITES" : "ADD TO FAVORITES (WISHLIST)"}
             </button>
           </div>
         </div>

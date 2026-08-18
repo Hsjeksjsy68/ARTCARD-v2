@@ -23,7 +23,10 @@ import {
   LogIn, 
   LogOut,
   Layers,
-  Crown
+  Crown,
+  Heart,
+  ShoppingCart,
+  PackageCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AuthModal } from './AuthModal';
@@ -31,25 +34,32 @@ import { AuthModal } from './AuthModal';
 interface UserProfileProps {
   user: User | null;
   cards: FootballCard[];
-  collectionIds: Set<string>;
+  vaultIds?: Set<string>;
+  favoriteIds?: Set<string>;
+  collectionIds?: Set<string>;
   onSelectCard: (card: FootballCard) => void;
-  onNavigateTab: (tab: 'database' | 'shop' | 'custom') => void;
-  onToggleCollection: (cardId: string) => void;
+  onNavigateTab: (tab: any) => void;
+  onToggleCollection?: (cardId: string) => void;
+  onToggleFavorite?: (cardId: string) => void;
 }
 
 export function UserProfile({
   user,
   cards,
+  vaultIds,
+  favoriteIds,
   collectionIds,
   onSelectCard,
   onNavigateTab,
-  onToggleCollection
+  onToggleCollection,
+  onToggleFavorite
 }: UserProfileProps) {
   const [profileData, setProfileData] = useState<UserProfileData | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [activeProfileTab, setActiveProfileTab] = useState<'vault' | 'favorites'>('vault');
 
   // Edit Form States
   const [editName, setEditName] = useState('');
@@ -57,6 +67,10 @@ export function UserProfile({
   const [editFavoriteTeam, setEditFavoriteTeam] = useState('');
   const [editFeaturedCardId, setEditFeaturedCardId] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
+
+  // Effective sets for vault (owned/bought/packed) and favorites (wishlist)
+  const effectiveVaultIds = vaultIds || collectionIds || new Set<string>();
+  const effectiveFavoriteIds = favoriteIds || new Set<string>();
 
   // Fetch / Listen to User Profile from Firestore
   useEffect(() => {
@@ -96,13 +110,16 @@ export function UserProfile({
     return () => unsubscribe();
   }, [user]);
 
-  // Derived user collection cards
-  const userCards = cards.filter(c => collectionIds.has(c.id));
+  // Derived user vault cards (Cards bought or packed)
+  const vaultCards = cards.filter(c => effectiveVaultIds.has(c.id));
   
-  // Total Portfolio value calculation
-  const totalValue = userCards.reduce((sum, card) => sum + (card.currentPrice || 0), 0);
+  // Derived user favorite cards (Wishlisted)
+  const favoriteCards = cards.filter(c => effectiveFavoriteIds.has(c.id));
+  
+  // Total Portfolio value calculation based on Vault cards owned
+  const totalValue = vaultCards.reduce((sum, card) => sum + (card.currentPrice || 0), 0);
 
-  // Rarest card in user collection
+  // Rarest card in user vault
   const rarityRank: Record<string, number> = {
     '1-of-1 Shield': 4,
     'Gold Autograph': 3,
@@ -110,13 +127,13 @@ export function UserProfile({
     'Base': 1
   };
 
-  const rarestCard = userCards.length > 0 
-    ? [...userCards].sort((a, b) => (rarityRank[b.rarity] || 0) - (rarityRank[a.rarity] || 0))[0]
+  const rarestCard = vaultCards.length > 0 
+    ? [...vaultCards].sort((a, b) => (rarityRank[b.rarity] || 0) - (rarityRank[a.rarity] || 0))[0]
     : null;
 
-  // Highest value card
-  const topValuedCard = userCards.length > 0
-    ? [...userCards].sort((a, b) => (b.currentPrice || 0) - (a.currentPrice || 0))[0]
+  // Highest value card in vault
+  const topValuedCard = vaultCards.length > 0
+    ? [...vaultCards].sort((a, b) => (b.currentPrice || 0) - (a.currentPrice || 0))[0]
     : null;
 
   // Featured showcase card
@@ -129,15 +146,15 @@ export function UserProfile({
   let tierColor = 'bg-neutral-200 text-black';
   let tierIcon = Trophy;
 
-  if (totalValue >= 2000 || userCards.some(c => c.rarity === '1-of-1 Shield')) {
+  if (totalValue >= 2000 || vaultCards.some(c => c.rarity === '1-of-1 Shield')) {
     collectorTier = 'Hall of Fame Collector';
     tierColor = 'bg-black text-[#D4FF00] border-black';
     tierIcon = Crown;
-  } else if (totalValue >= 500 || userCards.length >= 10) {
+  } else if (totalValue >= 500 || vaultCards.length >= 10) {
     collectorTier = 'Elite Collector';
     tierColor = 'bg-[#D4FF00] text-black border-black';
     tierIcon = Award;
-  } else if (totalValue >= 100 || userCards.length >= 3) {
+  } else if (totalValue >= 100 || vaultCards.length >= 3) {
     collectorTier = 'Pro Collector';
     tierColor = 'bg-white text-black border-black';
     tierIcon = Star;
@@ -151,26 +168,7 @@ export function UserProfile({
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const maxDim = 300;
-          let w = img.width;
-          let h = img.height;
-          if (w > h && w > maxDim) {
-            h = (h * maxDim) / w;
-            w = maxDim;
-          } else if (h > maxDim) {
-            w = (w * maxDim) / h;
-            h = maxDim;
-          }
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, w, h);
-          setEditAvatarUrl(canvas.toDataURL('image/jpeg', 0.85));
-        };
-        img.src = reader.result as string;
+        setEditAvatarUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -184,7 +182,7 @@ export function UserProfile({
     try {
       const userRef = doc(db, 'users', user.uid);
       const updatedData: Partial<UserProfileData> = {
-        displayName: editName.trim() || user.email?.split('@')[0] || 'Collector',
+        displayName: editName.trim() || 'Collector',
         bio: editBio.trim(),
         favoriteTeam: editFavoriteTeam,
         featuredCardId: editFeaturedCardId,
@@ -194,109 +192,98 @@ export function UserProfile({
       await setDoc(userRef, updatedData, { merge: true });
 
       if (auth.currentUser && editName.trim()) {
-        try {
-          await updateProfile(auth.currentUser, {
-            displayName: editName.trim(),
-            photoURL: editAvatarUrl || auth.currentUser.photoURL
-          });
-        } catch (authErr) {
-          console.warn("Could not update auth profile display name:", authErr);
-        }
+        await updateProfile(auth.currentUser, {
+          displayName: editName.trim()
+        });
       }
 
       setIsEditing(false);
-    } catch (err) {
-      console.error("Error saving profile:", err);
-      alert("Failed to save profile settings. Please try again.");
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      alert("Failed to save profile settings.");
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleCopyProfileLink = () => {
-    const url = window.location.href;
-    navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(window.location.href);
     setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2500);
+    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-    } catch (err) {
-      console.error("Sign out error:", err);
+    } catch (error) {
+      console.error("Sign out error:", error);
     }
   };
 
-  // If user is not logged in, show collector registration callout
+  const handleHeartClick = (cardId: string) => {
+    if (onToggleFavorite) {
+      onToggleFavorite(cardId);
+    } else if (onToggleCollection) {
+      onToggleCollection(cardId);
+    }
+  };
+
+  // If user is not logged in, render authentication prompt view
   if (!user) {
     return (
-      <div className="max-w-4xl mx-auto py-12 px-4">
-        <div className="bg-white border-4 border-black p-8 sm:p-12 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] text-center space-y-6">
-          <div className="w-20 h-20 bg-[#D4FF00] border-4 border-black mx-auto flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-            <UserIcon size={40} className="text-black" />
+      <div className="max-w-3xl mx-auto py-12 px-4">
+        <div className="bg-white border-4 border-black p-8 sm:p-12 text-center shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] space-y-6">
+          <div className="w-20 h-20 bg-[#D4FF00] border-4 border-black mx-auto flex items-center justify-center text-black">
+            <UserIcon size={40} />
           </div>
-
-          <div>
-            <h2 className="text-3xl sm:text-5xl font-black uppercase tracking-tighter text-black">
-              COLLECTOR PROFILE
+          
+          <div className="space-y-2">
+            <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tight text-black">
+              COLLECTOR VAULT & PROFILE
             </h2>
-            <p className="text-neutral-500 font-black text-xs sm:text-sm uppercase tracking-widest mt-2 max-w-xl mx-auto">
-              Sign in to unlock your personal card showcase, portfolio valuation analytics, collector badges, and custom showcase banners.
+            <p className="text-neutral-600 text-xs sm:text-sm font-bold uppercase tracking-wider max-w-md mx-auto">
+              Sign in to manage your owned Vault cards, mark favorite cards, track portfolio value, and open packs.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 max-w-2xl mx-auto text-left">
-            <div className="border-2 border-black p-4 bg-neutral-50 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-              <TrendingUp className="text-black mb-2" size={24} />
-              <div className="text-xs font-black uppercase tracking-wider">Live Portfolio</div>
-              <div className="text-[10px] text-neutral-500 font-bold uppercase mt-1">Real-time market tracking of all your favorite cards</div>
-            </div>
-            <div className="border-2 border-black p-4 bg-neutral-50 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-              <Shield className="text-black mb-2" size={24} />
-              <div className="text-xs font-black uppercase tracking-wider">Rarity Badges</div>
-              <div className="text-[10px] text-neutral-500 font-bold uppercase mt-1">Unlock collector ranks from Rookie to Hall of Fame</div>
-            </div>
-            <div className="border-2 border-black p-4 bg-neutral-50 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-              <Star className="text-black mb-2" size={24} />
-              <div className="text-xs font-black uppercase tracking-wider">Showcase Card</div>
-              <div className="text-[10px] text-neutral-500 font-bold uppercase mt-1">Spotlight your rarest grail card to other collectors</div>
-            </div>
-          </div>
-
-          <div className="pt-4">
+          <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
               onClick={() => setShowAuthModal(true)}
-              className="bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-8 py-4 text-sm font-black uppercase tracking-widest transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5"
+              className="w-full sm:w-auto bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-8 py-4 text-xs font-black uppercase tracking-widest transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-2"
             >
-              <LogIn className="inline-block mr-2" size={18} /> SIGN IN OR CREATE ACCOUNT
+              <LogIn size={16} /> SIGN IN / REGISTER
+            </button>
+            <button
+              onClick={() => onNavigateTab('database')}
+              className="w-full sm:w-auto bg-white hover:bg-neutral-100 text-black border-2 border-black px-8 py-4 text-xs font-black uppercase tracking-widest transition-colors"
+            >
+              EXPLORE DATABASE →
             </button>
           </div>
         </div>
 
-        {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
+        {showAuthModal && (
+          <AuthModal 
+            onClose={() => setShowAuthModal(false)} 
+          />
+        )}
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-10 pb-16">
-      {/* Profile Hero Header */}
+    <div className="space-y-10">
+      {/* Top Profile Hero Card */}
       <div className="bg-white border-4 border-black p-6 sm:p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
-        {/* Background Graphic Accent */}
-        <div className="absolute -right-16 -top-16 text-neutral-100 pointer-events-none opacity-50 select-none font-black text-9xl">
-          ART
-        </div>
-
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          {/* Avatar & Collector Info */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-            <div className="relative">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          {/* Avatar and Main Info */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+            <div className="relative shrink-0">
               {profileData?.customAvatar || user.photoURL ? (
-                <img
-                  src={profileData?.customAvatar || user.photoURL || ''}
-                  alt={profileData?.displayName || 'Collector'}
-                  className="w-24 h-24 sm:w-28 sm:h-28 object-cover border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-neutral-100"
+                <img 
+                  src={profileData?.customAvatar || user.photoURL || ''} 
+                  alt="Avatar" 
+                  className="w-24 h-24 sm:w-28 sm:h-28 object-cover border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
                 />
               ) : (
                 <div className="w-24 h-24 sm:w-28 sm:h-28 bg-[#D4FF00] border-4 border-black flex items-center justify-center text-black font-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
@@ -376,39 +363,36 @@ export function UserProfile({
         </div>
       </div>
 
-      {/* Portfolio Stats Cards */}
+      {/* Portfolio & Vault Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
         <div className="bg-white border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between">
           <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-1">PORTFOLIO VALUE</div>
           <div className="text-xl sm:text-3xl font-black text-black tracking-tight">{formatCurrency(totalValue)}</div>
           <div className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mt-2 flex items-center gap-1">
-            <TrendingUp size={12} /> LIVE VALUATION
+            <TrendingUp size={12} /> LIVE VAULT VALUATION
           </div>
         </div>
 
         <div className="bg-white border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between">
-          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-1">CARDS OWNED</div>
-          <div className="text-xl sm:text-3xl font-black text-black tracking-tight">{userCards.length}</div>
+          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-1">VAULT CARDS (OWNED)</div>
+          <div className="text-xl sm:text-3xl font-black text-black tracking-tight">{vaultCards.length}</div>
           <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mt-2">
-            IN PERSONAL VAULT
+            BOUGHT OR PACKED
           </div>
         </div>
 
         <div className="bg-white border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between">
-          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-1">TOP VALUED CARD</div>
-          <div className="text-sm sm:text-lg font-black text-black truncate">
-            {topValuedCard ? topValuedCard.player : 'NONE YET'}
+          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-1">SAVED FAVORITES</div>
+          <div className="text-xl sm:text-3xl font-black text-black tracking-tight text-red-600">{favoriteCards.length}</div>
+          <div className="text-[9px] font-black uppercase tracking-widest text-neutral-600 mt-2 flex items-center gap-1">
+            <Heart size={12} className="fill-red-500 text-red-500" /> WISHLIST CARDS
           </div>
-          <div className="text-[9px] font-black uppercase tracking-widest text-neutral-600 mt-2">
-            {topValuedCard ? formatCurrency(topValuedCard.currentPrice) : formatCurrency(0)}
-          </div>
-
         </div>
 
         <div className="bg-white border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between">
-          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-1">RAREST RARITY</div>
+          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-1">RAREST VAULT CARD</div>
           <div className="text-sm sm:text-base font-black text-black truncate">
-            {rarestCard ? rarestCard.rarity : 'BASE'}
+            {rarestCard ? rarestCard.rarity : 'NONE'}
           </div>
           <div className="text-[9px] font-black uppercase tracking-widest text-amber-600 mt-2 flex items-center gap-1">
             <Sparkles size={12} /> VAULT HIGHLIGHT
@@ -481,12 +465,12 @@ export function UserProfile({
           <span className="text-xs font-black text-neutral-500 uppercase tracking-widest">
             {
               [
-                userCards.length >= 1,
+                vaultCards.length >= 1,
                 totalValue >= 500,
-                userCards.some(c => c.rarity === '1-of-1 Shield'),
-                userCards.some(c => c.rarity === 'Gold Autograph'),
-                userCards.length >= 5,
-                true
+                vaultCards.some(c => c.rarity === '1-of-1 Shield'),
+                vaultCards.some(c => c.rarity === 'Gold Autograph'),
+                vaultCards.length >= 5,
+                favoriteCards.length >= 1
               ].filter(Boolean).length
             } / 6 UNLOCKED
           </span>
@@ -494,7 +478,7 @@ export function UserProfile({
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
           {/* Badge 1 */}
-          <div className={`p-4 border-2 border-black text-center flex flex-col items-center justify-center ${userCards.length >= 1 ? 'bg-neutral-50 shadow-[3px_3px_0px_0px_#D4FF00]' : 'opacity-40 bg-neutral-100'}`}>
+          <div className={`p-4 border-2 border-black text-center flex flex-col items-center justify-center ${vaultCards.length >= 1 ? 'bg-neutral-50 shadow-[3px_3px_0px_0px_#D4FF00]' : 'opacity-40 bg-neutral-100'}`}>
             <Trophy size={28} className="mb-2 text-amber-500" />
             <div className="text-[10px] font-black uppercase tracking-wider">First Card</div>
             <div className="text-[8px] text-neutral-500 uppercase font-bold mt-1">Own at least 1 card</div>
@@ -502,97 +486,160 @@ export function UserProfile({
 
           {/* Badge 2 */}
           <div className={`p-4 border-2 border-black text-center flex flex-col items-center justify-center ${totalValue >= 500 ? 'bg-neutral-50 shadow-[3px_3px_0px_0px_#D4FF00]' : 'opacity-40 bg-neutral-100'}`}>
-            <TrendingUp size={28} className="mb-2 text-emerald-600" />
-            <div className="text-[10px] font-black uppercase tracking-wider">High Roller</div>
-            <div className="text-[8px] text-neutral-500 uppercase font-bold mt-1">Portfolio ৳500+</div>
+            <Crown size={28} className="mb-2 text-yellow-500" />
+            <div className="text-[10px] font-black uppercase tracking-wider">৳500+ Value</div>
+            <div className="text-[8px] text-neutral-500 uppercase font-bold mt-1">Vault valued at ৳500+</div>
           </div>
 
           {/* Badge 3 */}
-          <div className={`p-4 border-2 border-black text-center flex flex-col items-center justify-center ${userCards.some(c => c.rarity === '1-of-1 Shield') ? 'bg-neutral-50 shadow-[3px_3px_0px_0px_#D4FF00]' : 'opacity-40 bg-neutral-100'}`}>
-            <Shield size={28} className="mb-2 text-black" />
+          <div className={`p-4 border-2 border-black text-center flex flex-col items-center justify-center ${vaultCards.some(c => c.rarity === '1-of-1 Shield') ? 'bg-neutral-50 shadow-[3px_3px_0px_0px_#D4FF00]' : 'opacity-40 bg-neutral-100'}`}>
+            <Shield size={28} className="mb-2 text-[#D4FF00]" />
             <div className="text-[10px] font-black uppercase tracking-wider">Shield Owner</div>
             <div className="text-[8px] text-neutral-500 uppercase font-bold mt-1">Own a 1-of-1 Shield</div>
           </div>
 
           {/* Badge 4 */}
-          <div className={`p-4 border-2 border-black text-center flex flex-col items-center justify-center ${userCards.some(c => c.rarity === 'Gold Autograph') ? 'bg-neutral-50 shadow-[3px_3px_0px_0px_#D4FF00]' : 'opacity-40 bg-neutral-100'}`}>
-            <Star size={28} className="mb-2 text-amber-500" />
+          <div className={`p-4 border-2 border-black text-center flex flex-col items-center justify-center ${vaultCards.some(c => c.rarity === 'Gold Autograph') ? 'bg-neutral-50 shadow-[3px_3px_0px_0px_#D4FF00]' : 'opacity-40 bg-neutral-100'}`}>
+            <Star size={28} className="mb-2 text-amber-400" />
             <div className="text-[10px] font-black uppercase tracking-wider">Auto Hunter</div>
             <div className="text-[8px] text-neutral-500 uppercase font-bold mt-1">Own a Gold Autograph</div>
           </div>
 
           {/* Badge 5 */}
-          <div className={`p-4 border-2 border-black text-center flex flex-col items-center justify-center ${userCards.length >= 5 ? 'bg-neutral-50 shadow-[3px_3px_0px_0px_#D4FF00]' : 'opacity-40 bg-neutral-100'}`}>
+          <div className={`p-4 border-2 border-black text-center flex flex-col items-center justify-center ${vaultCards.length >= 5 ? 'bg-neutral-50 shadow-[3px_3px_0px_0px_#D4FF00]' : 'opacity-40 bg-neutral-100'}`}>
             <Layers size={28} className="mb-2 text-blue-600" />
             <div className="text-[10px] font-black uppercase tracking-wider">Squad Master</div>
             <div className="text-[8px] text-neutral-500 uppercase font-bold mt-1">5+ Cards in Vault</div>
           </div>
 
           {/* Badge 6 */}
-          <div className="p-4 border-2 border-black text-center flex flex-col items-center justify-center bg-neutral-50 shadow-[3px_3px_0px_0px_#D4FF00]">
-            <Sparkles size={28} className="mb-2 text-purple-600" />
-            <div className="text-[10px] font-black uppercase tracking-wider">Art Collector</div>
-            <div className="text-[8px] text-neutral-500 uppercase font-bold mt-1">Official ArtCard Member</div>
+          <div className={`p-4 border-2 border-black text-center flex flex-col items-center justify-center ${favoriteCards.length >= 1 ? 'bg-neutral-50 shadow-[3px_3px_0px_0px_#D4FF00]' : 'opacity-40 bg-neutral-100'}`}>
+            <Heart size={28} className="mb-2 text-red-500 fill-red-500" />
+            <div className="text-[10px] font-black uppercase tracking-wider">Wishlist Scout</div>
+            <div className="text-[8px] text-neutral-500 uppercase font-bold mt-1">Mark a favorite card</div>
           </div>
         </div>
       </div>
 
-      {/* User's Owned Cards Vault */}
+      {/* User's Cards Sections with Tab Switcher for Vault vs Favorites */}
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b-2 border-black pb-4 gap-4">
-          <div>
-            <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tighter text-black flex items-center gap-3">
-              <WalletCards size={32} /> MY CARD VAULT
-            </h2>
-            <p className="text-neutral-500 mt-1 text-xs font-black uppercase tracking-widest">
-              {userCards.length} CARDS IN VAULT • VALUED AT {formatCurrency(totalValue)}
-            </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setActiveProfileTab('vault')}
+              className={cn(
+                "px-5 py-2.5 text-xs sm:text-sm font-black uppercase tracking-widest border-2 border-black transition-all flex items-center gap-2",
+                activeProfileTab === 'vault'
+                  ? "bg-black text-[#D4FF00] shadow-[4px_4px_0px_0px_#D4FF00]"
+                  : "bg-white text-black hover:bg-neutral-100 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+              )}
+            >
+              <Trophy size={16} />
+              MY VAULT ({vaultCards.length})
+            </button>
+
+            <button
+              onClick={() => setActiveProfileTab('favorites')}
+              className={cn(
+                "px-5 py-2.5 text-xs sm:text-sm font-black uppercase tracking-widest border-2 border-black transition-all flex items-center gap-2",
+                activeProfileTab === 'favorites'
+                  ? "bg-black text-white shadow-[4px_4px_0px_0px_red]"
+                  : "bg-white text-black hover:bg-neutral-100 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+              )}
+            >
+              <Heart size={16} className={activeProfileTab === 'favorites' ? 'text-red-500 fill-red-500' : 'text-red-500'} />
+              FAVORITES ({favoriteCards.length})
+            </button>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               onClick={() => onNavigateTab('database')}
-              className="bg-white hover:bg-[#D4FF00] text-black border-2 border-black px-4 py-2 text-xs font-black uppercase tracking-widest transition-colors"
+              className="bg-white hover:bg-[#D4FF00] text-black border-2 border-black px-4 py-2 text-xs font-black uppercase tracking-widest transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
             >
               BROWSE DATABASE →
             </button>
             <button
               onClick={() => onNavigateTab('shop')}
-              className="bg-black text-[#D4FF00] hover:bg-neutral-800 border-2 border-black px-4 py-2 text-xs font-black uppercase tracking-widest transition-colors"
+              className="bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-4 py-2 text-xs font-black uppercase tracking-widest transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
             >
-              ORDER PACKS →
+              OPEN PACKS →
             </button>
           </div>
         </div>
 
-        {userCards.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 md:gap-8">
-            {userCards.map((card) => (
-              <div key={card.id} className="relative group">
-                <CardItem
-                  card={card}
-                  inCollection={true}
-                  onClick={(c) => onSelectCard(c)}
-                />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-20 border-2 border-black bg-neutral-50 p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] space-y-4">
-            <WalletCards size={48} className="mx-auto text-neutral-400" />
-            <h3 className="text-xl font-black uppercase tracking-widest text-black">NO CARDS IN YOUR VAULT YET</h3>
-            <p className="text-xs text-neutral-500 uppercase font-black max-w-md mx-auto">
-              Browse the card database and click the star/library icon to add cards to your personal collection.
-            </p>
-            <div className="pt-2">
-              <button
-                onClick={() => onNavigateTab('database')}
-                className="bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-6 py-3 text-xs font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all"
-              >
-                BROWSE CARDS DATABASE
-              </button>
+        {activeProfileTab === 'vault' ? (
+          /* Vault Cards View */
+          vaultCards.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 md:gap-8">
+              {vaultCards.map((card) => (
+                <div key={card.id} className="relative group">
+                  <CardItem
+                    card={card}
+                    inVault={true}
+                    isFavorite={effectiveFavoriteIds.has(card.id)}
+                    onToggleFavorite={(e, id) => handleHeartClick(id)}
+                    onClick={(c) => onSelectCard(c)}
+                  />
+                </div>
+              ))}
             </div>
-          </div>
+          ) : (
+            <div className="text-center py-20 border-2 border-black bg-neutral-50 p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] space-y-4">
+              <Trophy size={48} className="mx-auto text-neutral-400" />
+              <h3 className="text-xl font-black uppercase tracking-widest text-black">YOUR VAULT IS EMPTY</h3>
+              <p className="text-xs text-neutral-500 uppercase font-black max-w-md mx-auto">
+                Cards you buy directly from the database or pull from booster packs in the shop will automatically be stored in your Vault.
+              </p>
+              <div className="pt-2 flex flex-wrap justify-center gap-3">
+                <button
+                  onClick={() => onNavigateTab('shop')}
+                  className="bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-6 py-3 text-xs font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all"
+                >
+                  OPEN BOOSTER PACKS
+                </button>
+                <button
+                  onClick={() => onNavigateTab('database')}
+                  className="bg-black text-[#D4FF00] hover:bg-neutral-800 border-2 border-black px-6 py-3 text-xs font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all"
+                >
+                  BUY FROM DATABASE
+                </button>
+              </div>
+            </div>
+          )
+        ) : (
+          /* Favorites Cards View */
+          favoriteCards.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 md:gap-8">
+              {favoriteCards.map((card) => (
+                <div key={card.id} className="relative group">
+                  <CardItem
+                    card={card}
+                    inVault={effectiveVaultIds.has(card.id)}
+                    isFavorite={true}
+                    onToggleFavorite={(e, id) => handleHeartClick(id)}
+                    onClick={(c) => onSelectCard(c)}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-20 border-2 border-black bg-neutral-50 p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] space-y-4">
+              <Heart size={48} className="mx-auto text-red-400" />
+              <h3 className="text-xl font-black uppercase tracking-widest text-black">NO FAVORITE CARDS SAVED YET</h3>
+              <p className="text-xs text-neutral-500 uppercase font-black max-w-md mx-auto">
+                Click the heart icon on any card in the Database or Vault to curate your personal wishlist.
+              </p>
+              <div className="pt-2">
+                <button
+                  onClick={() => onNavigateTab('database')}
+                  className="bg-black text-white hover:bg-[#D4FF00] hover:text-black border-2 border-black px-6 py-3 text-xs font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all"
+                >
+                  EXPLORE CARDS TO FAVORITE
+                </button>
+              </div>
+            </div>
+          )
         )}
       </div>
 
@@ -699,10 +746,10 @@ export function UserProfile({
                 </div>
 
                 {/* Featured Card Selector */}
-                {userCards.length > 0 && (
+                {vaultCards.length > 0 && (
                   <div>
                     <label className="block text-xs font-black uppercase tracking-widest text-neutral-600 mb-2">
-                      FEATURED SHOWCASE CARD (HOLY GRAIL)
+                      FEATURED SHOWCASE CARD (FROM YOUR VAULT)
                     </label>
                     <select
                       value={editFeaturedCardId}
@@ -710,7 +757,7 @@ export function UserProfile({
                       className="w-full bg-neutral-50 border-2 border-black p-3 text-sm font-black uppercase tracking-wider focus:outline-none focus:bg-white"
                     >
                       <option value="">AUTO (HIGHEST VALUED CARD)</option>
-                      {userCards.map((c) => (
+                      {vaultCards.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.player} ({c.team}) - {formatCurrency(c.currentPrice)} [{c.rarity}]
                         </option>

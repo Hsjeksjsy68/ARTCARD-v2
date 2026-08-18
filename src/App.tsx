@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Library, Grid3X3, WalletCards, RefreshCw, Flame, DollarSign, ArrowUpDown, SlidersHorizontal, Sparkles, X, ChevronRight } from 'lucide-react';
+import { Search, Grid3X3, WalletCards, RefreshCw, Flame, DollarSign, ArrowUpDown, SlidersHorizontal, Sparkles, X, ChevronRight, Trophy, Heart } from 'lucide-react';
 import { cardsDatabase } from './data';
 import { CardItem } from './components/CardItem';
 import { CardPreviewPage } from './components/CardPreviewPage';
@@ -15,7 +15,7 @@ import { formatCurrency, getDefaultStock } from './lib/utils';
 import { db, auth, onAuthStateChanged, collection, doc, setDoc, getDoc, User, deleteDoc, onSnapshot, getDocs, increment, updateDoc, addDoc } from './lib/firebase';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'database' | 'collection' | 'admin' | 'manage' | 'shop' | 'custom' | 'profile'>('database');
+  const [activeTab, setActiveTab] = useState<'database' | 'vault' | 'favorites' | 'admin' | 'manage' | 'shop' | 'custom' | 'profile'>('database');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTeam, setFilterTeam] = useState('');
   const [filterPosition, setFilterPosition] = useState('');
@@ -34,7 +34,8 @@ export default function App() {
   const [selectedCard, setSelectedCard] = useState<FootballCard | null>(null);
   
   const [user, setUser] = useState<User | null>(null);
-  const [collectionIds, setCollectionIds] = useState<Set<string>>(new Set());
+  const [vaultIds, setVaultIds] = useState<Set<string>>(new Set());
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [isBuyingCard, setIsBuyingCard] = useState(false);
@@ -47,27 +48,32 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Load user's collection and wallet balance
+        // Load user's vault (owned), favorites, and wallet balance
         const userRef = doc(db, 'users', currentUser.uid);
         const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
-            setCollectionIds(new Set(data.collectionIds || []));
+            // Support both new vaultIds and legacy collectionIds
+            const vIds = data.vaultIds || data.collectionIds || [];
+            const fIds = data.favoriteIds || [];
+            setVaultIds(new Set(vIds));
+            setFavoriteIds(new Set(fIds));
             setWalletBalance(data.walletBalance || 0);
           } else {
-            setCollectionIds(new Set());
+            setVaultIds(new Set());
+            setFavoriteIds(new Set());
             setWalletBalance(0);
           }
         });
         return () => unsubscribeUser();
       } else {
-        setCollectionIds(new Set());
+        setVaultIds(new Set());
+        setFavoriteIds(new Set());
         setWalletBalance(0);
       }
     });
     return () => unsubscribe();
   }, []);
-
 
   useEffect(() => {
     setLoadingCards(true);
@@ -161,36 +167,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [searchQuery, cards]);
 
-  const saveCollectionToFirebase = async (newCollection: Set<string>) => {
-    if (!user) return;
-    try {
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
-        email: user.email,
-        collectionIds: Array.from(newCollection)
-      }, { merge: true });
-    } catch (error) {
-      console.error("Error saving collection:", error);
-    }
-  };
-
-  const handleCardsDrawn = (drawnCards: FootballCard[]) => {
-    setCollectionIds(prev => {
-      const next = new Set<string>(prev);
-      let added = false;
-      drawnCards.forEach(c => {
-        if (!next.has(c.id)) {
-          next.add(c.id);
-          added = true;
-        }
-      });
-      if (added) {
-        saveCollectionToFirebase(next);
-      }
-      return next;
-    });
-  };
-
   const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
@@ -200,23 +176,67 @@ export default function App() {
     }
   }, [toastMessage]);
 
-  const handleToggleCollection = (cardId: string) => {
+  // Handle Vault Updates (Cards bought or packed)
+  const saveVaultToFirebase = async (newVault: Set<string>) => {
+    if (!user) return;
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
+        email: user.email,
+        vaultIds: Array.from(newVault),
+        collectionIds: Array.from(newVault) // sync legacy key
+      }, { merge: true });
+    } catch (error) {
+      console.error("Error saving vault:", error);
+    }
+  };
+
+  // Handle Favorites Toggle (User manually marks any card as favorite)
+  const handleToggleFavorite = async (cardId: string) => {
     if (!user) {
-      setToastMessage("Please sign in to manage your collection.");
+      setToastMessage("Please sign in to add cards to your favorites.");
       return;
     }
-    setCollectionIds(prev => {
+    const next = new Set<string>(favoriteIds);
+    const wasFavorite = next.has(cardId);
+    if (wasFavorite) {
+      next.delete(cardId);
+      setToastMessage("Removed from Favorites.");
+    } else {
+      next.add(cardId);
+      setToastMessage("❤️ Added to Favorites!");
+    }
+    setFavoriteIds(next);
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
+        email: user.email,
+        favoriteIds: Array.from(next)
+      }, { merge: true });
+    } catch (error) {
+      console.error("Error saving favorites:", error);
+    }
+  };
+
+  // Cards drawn from booster pack -> automatically placed in Vault
+  const handleCardsDrawn = (drawnCards: FootballCard[]) => {
+    setVaultIds(prev => {
       const next = new Set<string>(prev);
-      if (next.has(cardId)) {
-        next.delete(cardId);
-      } else {
-        next.add(cardId);
+      let added = false;
+      drawnCards.forEach(c => {
+        if (!next.has(c.id)) {
+          next.add(c.id);
+          added = true;
+        }
+      });
+      if (added) {
+        saveVaultToFirebase(next);
       }
-      saveCollectionToFirebase(next);
       return next;
     });
   };
 
+  // Buy single card directly from database -> added to Vault
   const handleBuyDirectCard = async (card: FootballCard) => {
     if (!user) {
       setToastMessage("Please sign in to purchase cards.");
@@ -241,14 +261,15 @@ export default function App() {
       const userRef = doc(db, 'users', user.uid);
       const cardRef = doc(db, 'cards', card.id);
 
-      // 1. Deduct balance and add card to user collection
-      const nextCollection = new Set(collectionIds);
-      nextCollection.add(card.id);
+      // 1. Deduct balance and add card to user's Vault
+      const nextVault = new Set(vaultIds);
+      nextVault.add(card.id);
 
       await setDoc(userRef, {
         email: user.email,
         walletBalance: increment(-card.currentPrice),
-        collectionIds: Array.from(nextCollection)
+        vaultIds: Array.from(nextVault),
+        collectionIds: Array.from(nextVault)
       }, { merge: true });
 
       // 2. Decrement stock from database
@@ -267,8 +288,8 @@ export default function App() {
         timestamp: Date.now()
       });
 
-      setCollectionIds(nextCollection);
-      setToastMessage(`🎉 Successfully purchased ${card.player} for ${formatCurrency(card.currentPrice)}!`);
+      setVaultIds(nextVault);
+      setToastMessage(`🎉 Successfully bought ${card.player} and saved to your Vault!`);
     } catch (err: any) {
       console.error("Purchase error:", err);
       setToastMessage(`Purchase failed: ${err.message || 'Please try again.'}`);
@@ -276,7 +297,6 @@ export default function App() {
       setIsBuyingCard(false);
     }
   };
-
 
   const handleAddCard = async (newCard: FootballCard) => {
     try {
@@ -296,9 +316,13 @@ export default function App() {
     setSelectedCard(card);
   };
 
-  const switchTab = (tab: 'database' | 'collection' | 'admin' | 'manage' | 'shop' | 'custom' | 'profile') => {
+  const switchTab = (tab: 'database' | 'vault' | 'favorites' | 'admin' | 'manage' | 'shop' | 'custom' | 'profile' | 'collection') => {
     setSelectedCard(null);
-    setActiveTab(tab);
+    if (tab === 'collection') {
+      setActiveTab('vault');
+    } else {
+      setActiveTab(tab as any);
+    }
   };
 
   const handleResetFilters = () => {
@@ -367,8 +391,11 @@ export default function App() {
     
     const allMatches = matchesSearch && matchesTeam && matchesPosition && matchesRarity && matchesEdition && matchesPricePreset && matchesMinPrice && matchesMaxPrice;
 
-    if (activeTab === 'collection') {
-      return allMatches && collectionIds.has(card.id);
+    if (activeTab === 'vault') {
+      return allMatches && vaultIds.has(card.id);
+    }
+    if (activeTab === 'favorites') {
+      return allMatches && favoriteIds.has(card.id);
     }
     return allMatches;
   });
@@ -402,10 +429,10 @@ export default function App() {
     .sort((a, b) => (b.searchCount || 0) - (a.searchCount || 0))
     .slice(0, 6);
 
-  let collectionValue = 0;
-  collectionIds.forEach(id => {
+  let vaultValue = 0;
+  vaultIds.forEach(id => {
     const card = cards.find(c => c.id === id);
-    collectionValue += (card?.currentPrice || 0);
+    vaultValue += (card?.currentPrice || 0);
   });
 
   const totalMarketCap = cards.filter(card => !!card.imageUrl).reduce((total, card) => total + card.currentPrice, 0);
@@ -422,10 +449,15 @@ export default function App() {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white border-b-2 border-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-12">
-            <h1 className="text-3xl font-black tracking-tighter text-black uppercase">ARTCARD</h1>
+          <div className="flex items-center gap-8 lg:gap-12">
+            <h1 
+              onClick={() => switchTab('database')}
+              className="text-3xl font-black tracking-tighter text-black uppercase cursor-pointer hover:text-[#556b00] transition-colors"
+            >
+              ARTCARD
+            </h1>
             
-            <nav className="hidden md:flex gap-8 text-sm font-black tracking-widest text-neutral-500 uppercase mt-1">
+            <nav className="hidden md:flex gap-6 lg:gap-8 text-sm font-black tracking-widest text-neutral-500 uppercase mt-1">
               <button 
                 onClick={() => switchTab('database')}
                 className={`transition-colors py-2 border-b-4 ${
@@ -435,12 +467,22 @@ export default function App() {
                 DATABASE
               </button>
               <button 
-                onClick={() => switchTab('collection')}
-                className={`transition-colors py-2 border-b-4 ${
-                  activeTab === 'collection' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
+                onClick={() => switchTab('vault')}
+                className={`transition-colors py-2 border-b-4 flex items-center gap-1.5 ${
+                  activeTab === 'vault' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
                 }`}
               >
-                FAVORITES
+                <Trophy size={14} className="text-black" />
+                VAULT ({vaultIds.size})
+              </button>
+              <button 
+                onClick={() => switchTab('favorites')}
+                className={`transition-colors py-2 border-b-4 flex items-center gap-1.5 ${
+                  activeTab === 'favorites' && !selectedCard ? 'text-black border-black' : 'border-transparent hover:text-black hover:border-black'
+                }`}
+              >
+                <Heart size={14} className="text-red-500 fill-red-500" />
+                FAVORITES ({favoriteIds.size})
               </button>
               <button 
                 onClick={() => switchTab('shop')}
@@ -481,7 +523,7 @@ export default function App() {
             </nav>
           </div>
 
-          <div className="flex items-center gap-4 sm:gap-6">
+          <div className="flex items-center gap-3 sm:gap-6">
             {/* Wallet Quick Balance & Top-Up Button */}
             <button
               onClick={() => {
@@ -491,15 +533,15 @@ export default function App() {
                   setIsWalletOpen(true);
                 }
               }}
-              className="flex items-center gap-2 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+              className="flex items-center gap-1.5 sm:gap-2 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-2.5 sm:px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
             >
               <DollarSign size={14} strokeWidth={3} />
               <span>{user ? formatCurrency(walletBalance) : 'TOP UP ৳'}</span>
             </button>
 
-            <div className="hidden sm:flex flex-col items-end mr-1">
-              <span className="text-[10px] text-neutral-500 uppercase tracking-widest font-black mb-0.5">Portfolio Value</span>
-              <span className="text-xs font-black text-black bg-neutral-100 px-2.5 py-0.5 border border-black">{formatCurrency(collectionValue)}</span>
+            <div className="hidden lg:flex flex-col items-end mr-1">
+              <span className="text-[10px] text-neutral-500 uppercase tracking-widest font-black mb-0.5">Vault Portfolio</span>
+              <span className="text-xs font-black text-black bg-neutral-100 px-2.5 py-0.5 border border-black">{formatCurrency(vaultValue)}</span>
             </div>
             <UserAuth 
               user={user} 
@@ -516,35 +558,43 @@ export default function App() {
         
         {/* Mobile Navigation */}
         <div className="-mx-4 px-4 sm:-mx-6 sm:px-6 mb-8 overflow-hidden">
-          <div className="md:hidden flex gap-3 overflow-x-auto pb-6 pt-2 snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <div className="md:hidden flex gap-2.5 overflow-x-auto pb-4 pt-1 snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <button 
               onClick={() => switchTab('database')}
-              className={`shrink-0 snap-start px-6 py-3 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
-                activeTab === 'database' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[4px_4px_0px_0px_#D4FF00] -translate-y-1' : 'bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50 active:translate-y-0 active:shadow-none'
+              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
+                activeTab === 'database' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
               }`}
             >
               DATABASE
             </button>
             <button 
-              onClick={() => switchTab('collection')}
-              className={`shrink-0 snap-start px-6 py-3 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
-                activeTab === 'collection' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[4px_4px_0px_0px_#D4FF00] -translate-y-1' : 'bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50 active:translate-y-0 active:shadow-none'
+              onClick={() => switchTab('vault')}
+              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === 'vault' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
               }`}
             >
-              FAVORITES
+              <Trophy size={14} /> VAULT ({vaultIds.size})
+            </button>
+            <button 
+              onClick={() => switchTab('favorites')}
+              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === 'favorites' && !selectedCard ? 'bg-black text-white shadow-[3px_3px_0px_0px_red] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
+              }`}
+            >
+              <Heart size={14} className="text-red-500 fill-red-500" /> FAVORITES ({favoriteIds.size})
             </button>
             <button 
               onClick={() => switchTab('shop')}
-              className={`shrink-0 snap-start px-6 py-3 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
-                activeTab === 'shop' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[4px_4px_0px_0px_#D4FF00] -translate-y-1' : 'bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50 active:translate-y-0 active:shadow-none'
+              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
+                activeTab === 'shop' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
               }`}
             >
               SHOP
             </button>
             <button 
               onClick={() => switchTab('custom')}
-              className={`shrink-0 snap-start px-6 py-3 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
-                activeTab === 'custom' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[4px_4px_0px_0px_#D4FF00] -translate-y-1' : 'bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50 active:translate-y-0 active:shadow-none'
+              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
+                activeTab === 'custom' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
               }`}
             >
               CUSTOM CARD
@@ -553,16 +603,16 @@ export default function App() {
               <>
                 <button 
                   onClick={() => switchTab('admin')}
-                  className={`shrink-0 snap-start px-6 py-3 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
-                    activeTab === 'admin' && !selectedCard ? 'bg-[#D4FF00] text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -translate-y-1' : 'bg-neutral-200 text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-300 active:translate-y-0 active:shadow-none'
+                  className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
+                    activeTab === 'admin' && !selectedCard ? 'bg-[#D4FF00] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]' : 'bg-neutral-200 text-black'
                   }`}
                 >
                   ADD CARD
                 </button>
                 <button 
                   onClick={() => switchTab('manage')}
-                  className={`shrink-0 snap-start px-6 py-3 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
-                    activeTab === 'manage' && !selectedCard ? 'bg-[#D4FF00] text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -translate-y-1' : 'bg-neutral-200 text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-300 active:translate-y-0 active:shadow-none'
+                  className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
+                    activeTab === 'manage' && !selectedCard ? 'bg-[#D4FF00] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]' : 'bg-neutral-200 text-black'
                   }`}
                 >
                   MANAGE SHOP
@@ -576,8 +626,9 @@ export default function App() {
           <CardPreviewPage
             card={selectedCard}
             allCards={cards}
-            inCollection={collectionIds.has(selectedCard.id)}
-            onToggleCollection={handleToggleCollection}
+            inVault={vaultIds.has(selectedCard.id)}
+            isFavorite={favoriteIds.has(selectedCard.id)}
+            onToggleFavorite={() => handleToggleFavorite(selectedCard.id)}
             onBack={() => setSelectedCard(null)}
             onSelectRelatedCard={(relCard) => handleSelectCard(relCard)}
             userEmail={user?.email}
@@ -590,10 +641,11 @@ export default function App() {
           <UserProfile
             user={user}
             cards={cards}
-            collectionIds={collectionIds}
+            vaultIds={vaultIds}
+            favoriteIds={favoriteIds}
             onSelectCard={handleSelectCard}
             onNavigateTab={(tab) => switchTab(tab)}
-            onToggleCollection={handleToggleCollection}
+            onToggleFavorite={handleToggleFavorite}
           />
         ) : activeTab === 'admin' ? (
           (user?.email === 'grakibg@gmail.com' || user?.email === 'wwwrakibcom071@gmail.com' || user?.email === '1@1.com') ? (
@@ -668,7 +720,6 @@ export default function App() {
                     key={preset.id}
                     onClick={() => {
                       setPricePreset(preset.id);
-                      // clear custom min/max when clicking preset
                       setMinPrice('');
                       setMaxPrice('');
                     }}
@@ -789,14 +840,11 @@ export default function App() {
                       <Flame size={20} />
                     </div>
                     <div>
-                      <h2 className="text-lg sm:text-xl font-black uppercase tracking-tight text-black flex items-center gap-2">
-                        MOST SEARCHED CARDS
-                        <span className="text-[10px] bg-[#D4FF00] text-black px-2 py-0.5 border border-black font-black uppercase">
-                          TRENDING NOW
-                        </span>
+                      <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-black flex items-center gap-2">
+                        MOST SEARCHED & VIEWED CARDS
                       </h2>
                       <p className="text-[10px] text-neutral-500 font-black uppercase tracking-widest">
-                        TOP POPULAR CARDS BASED ON LIVE COLLECTOR SEARCHES
+                        REAL-TIME MARKET TRENDS BASED ON COLLECTOR INTEREST
                       </p>
                     </div>
                   </div>
@@ -844,14 +892,23 @@ export default function App() {
             {/* Tab Header Info */}
             <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between border-b-2 border-black pb-4 gap-4">
               <div>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tighter text-black">
-                  {activeTab === 'database' ? 'CARD DATABASE' : 'MY FAVORITES'}
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tighter text-black flex items-center gap-3">
+                  {activeTab === 'database' && 'CARD DATABASE'}
+                  {activeTab === 'vault' && (
+                    <>
+                      <Trophy size={36} /> MY CARD VAULT (OWNED)
+                    </>
+                  )}
+                  {activeTab === 'favorites' && (
+                    <>
+                      <Heart size={36} className="text-red-500 fill-red-500" /> MY FAVORITES
+                    </>
+                  )}
                 </h1>
                 <p className="text-neutral-500 mt-2 text-xs font-black uppercase tracking-widest">
-                  {activeTab === 'database' 
-                    ? `SHOWING ${sortedCards.length} OF ${cards.filter(c => !!c.imageUrl).length} CARDS${sortBy === 'most-searched' ? ' • RANKED BY POPULARITY 🔥' : ''}` 
-                    : `YOU OWN ${collectionIds.size} CARDS VALUED AT ${formatCurrency(collectionValue)}.`
-                  }
+                  {activeTab === 'database' && `SHOWING ${sortedCards.length} OF ${cards.filter(c => !!c.imageUrl).length} CARDS${sortBy === 'most-searched' ? ' • RANKED BY POPULARITY 🔥' : ''}`}
+                  {activeTab === 'vault' && `YOU OWN ${vaultIds.size} CARDS IN YOUR VAULT VALUED AT ${formatCurrency(vaultValue)}.`}
+                  {activeTab === 'favorites' && `YOU HAVE SAVED ${favoriteIds.size} FAVORITE CARDS.`}
                 </p>
               </div>
 
@@ -873,27 +930,69 @@ export default function App() {
                   <CardItem 
                     key={card.id} 
                     card={card} 
-                    inCollection={collectionIds.has(card.id)}
+                    inVault={vaultIds.has(card.id)}
+                    isFavorite={favoriteIds.has(card.id)}
+                    onToggleFavorite={(e, id) => handleToggleFavorite(id)}
                     onClick={(c) => handleSelectCard(c)} 
                   />
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-32 text-center border-2 border-black bg-neutral-100">
-                <WalletCards size={48} className="text-black mb-6" />
-                <h3 className="text-2xl font-black text-black mb-4 uppercase tracking-widest">NO CARDS FOUND</h3>
-                <p className="text-neutral-500 max-w-md text-xs font-black uppercase tracking-widest mb-6">
-                  {activeTab === 'collection' 
-                    ? (user ? "YOU HAVEN'T ADDED ANY CARDS TO YOUR COLLECTION YET. BROWSE THE DATABASE TO START COLLECTING." : "PLEASE SIGN IN TO VIEW YOUR COLLECTION.")
-                    : "NO CARDS MATCH YOUR SEARCH OR PRICE CRITERIA."}
-                </p>
-                {hasActiveFilters && (
-                  <button
-                    onClick={handleResetFilters}
-                    className="bg-black text-[#D4FF00] border-2 border-black px-6 py-3 font-black text-xs uppercase tracking-widest hover:bg-neutral-800 shadow-[4px_4px_0px_0px_#D4FF00]"
-                  >
-                    CLEAR ALL FILTERS
-                  </button>
+              <div className="flex flex-col items-center justify-center py-32 text-center border-2 border-black bg-neutral-100 p-6">
+                {activeTab === 'vault' ? (
+                  <>
+                    <Trophy size={48} className="text-black mb-6" />
+                    <h3 className="text-2xl font-black text-black mb-4 uppercase tracking-widest">YOUR VAULT IS EMPTY</h3>
+                    <p className="text-neutral-500 max-w-md text-xs font-black uppercase tracking-widest mb-6">
+                      {user 
+                        ? "YOU HAVEN'T PURCHASED OR DRAWN ANY CARDS YET. BUY FROM THE DATABASE OR OPEN BOOSTER PACKS TO FILL YOUR VAULT." 
+                        : "PLEASE SIGN IN TO VIEW YOUR CARD VAULT."}
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => switchTab('shop')}
+                        className="bg-[#D4FF00] text-black border-2 border-black px-6 py-3 font-black text-xs uppercase tracking-widest hover:bg-black hover:text-[#D4FF00] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                      >
+                        OPEN PACKS
+                      </button>
+                      <button
+                        onClick={() => switchTab('database')}
+                        className="bg-black text-[#D4FF00] border-2 border-black px-6 py-3 font-black text-xs uppercase tracking-widest hover:bg-neutral-800 shadow-[4px_4px_0px_0px_#D4FF00]"
+                      >
+                        BROWSE DATABASE
+                      </button>
+                    </div>
+                  </>
+                ) : activeTab === 'favorites' ? (
+                  <>
+                    <Heart size={48} className="text-red-500 mb-6" />
+                    <h3 className="text-2xl font-black text-black mb-4 uppercase tracking-widest">NO FAVORITES SAVED</h3>
+                    <p className="text-neutral-500 max-w-md text-xs font-black uppercase tracking-widest mb-6">
+                      CLICK THE HEART ICON ON ANY CARD TO SAVE IT TO YOUR FAVORITES WISHLIST.
+                    </p>
+                    <button
+                      onClick={() => switchTab('database')}
+                      className="bg-black text-white hover:bg-[#D4FF00] hover:text-black border-2 border-black px-6 py-3 font-black text-xs uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                    >
+                      BROWSE CARDS
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <WalletCards size={48} className="text-black mb-6" />
+                    <h3 className="text-2xl font-black text-black mb-4 uppercase tracking-widest">NO CARDS FOUND</h3>
+                    <p className="text-neutral-500 max-w-md text-xs font-black uppercase tracking-widest mb-6">
+                      NO CARDS MATCH YOUR CURRENT SEARCH OR PRICE CRITERIA.
+                    </p>
+                    {hasActiveFilters && (
+                      <button
+                        onClick={handleResetFilters}
+                        className="bg-black text-[#D4FF00] border-2 border-black px-6 py-3 font-black text-xs uppercase tracking-widest hover:bg-neutral-800 shadow-[4px_4px_0px_0px_#D4FF00]"
+                      >
+                        CLEAR ALL FILTERS
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -923,15 +1022,7 @@ export default function App() {
         onClose={() => setIsWalletOpen(false)}
         user={user}
         walletBalance={walletBalance}
-        onTopUpSuccess={(amount) => {
-          setToastMessage(`🎉 Wallet credited with ${formatCurrency(amount)}!`);
-        }}
-        onOpenAuth={() => {
-          setIsWalletOpen(false);
-          switchTab('profile');
-        }}
       />
     </div>
   );
 }
-

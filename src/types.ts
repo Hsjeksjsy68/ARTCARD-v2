@@ -72,6 +72,8 @@ export interface UserProfileData {
   customAvatar?: string;
   joinedAt?: number;
   collectionIds?: string[];
+  vaultIds?: string[];
+  favoriteIds?: string[];
   walletBalance?: number;
 }
 

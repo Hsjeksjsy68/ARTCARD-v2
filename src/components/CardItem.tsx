@@ -2,20 +2,31 @@ import React from 'react';
 import { FootballCard } from '../types';
 import { cn, formatCurrency, getDefaultStock, getDefaultMaxSupply } from '../lib/utils';
 import { motion } from 'motion/react';
-import { Shield, Sparkles, Star, Library, AlertCircle } from 'lucide-react';
+import { Shield, Sparkles, Star, Heart, Trophy, AlertCircle } from 'lucide-react';
 
 interface CardItemProps {
   card: FootballCard;
   inCollection?: boolean;
+  inVault?: boolean;
+  isFavorite?: boolean;
+  onToggleFavorite?: (e: React.MouseEvent, cardId: string) => void;
   onClick: (card: FootballCard) => void;
   key?: React.Key;
 }
 
-export function CardItem({ card, inCollection, onClick }: CardItemProps) {
+export function CardItem({ 
+  card, 
+  inCollection, 
+  inVault, 
+  isFavorite, 
+  onToggleFavorite, 
+  onClick 
+}: CardItemProps) {
   const isHolo = card.rarity !== 'Base';
   const stock = getDefaultStock(card);
   const maxSupply = getDefaultMaxSupply(card);
   const isSoldOut = stock <= 0;
+  const isOwnedInVault = inVault ?? inCollection;
   
   return (
     <motion.div
@@ -35,12 +46,45 @@ export function CardItem({ card, inCollection, onClick }: CardItemProps) {
           <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-[linear-gradient(105deg,transparent_20%,rgba(212,255,0,0.1)_25%,transparent_30%)] transition-opacity duration-700 ease-out z-20 pointer-events-none" />
         )}
 
-        {/* Collection Badge */}
-        {inCollection && (
-          <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-30 bg-[#D4FF00] p-1 sm:p-1.5 border-2 border-black text-black">
-            <Library size={12} className="sm:w-3.5 sm:h-3.5" />
-          </div>
-        )}
+        {/* Top Right Action & Badges: Vault Owned Badge & Interactive Favorite Heart */}
+        <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 z-30 flex items-center gap-1.5">
+          {/* Vault Owned Indicator */}
+          {isOwnedInVault && (
+            <div 
+              title="Owned in your Vault"
+              className="bg-black text-[#D4FF00] border-2 border-black px-1.5 py-0.5 sm:px-2 sm:py-1 text-[8px] sm:text-[9px] font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1"
+            >
+              <Trophy size={10} className="sm:w-3 sm:h-3 text-[#D4FF00]" />
+              <span>VAULT</span>
+            </div>
+          )}
+
+          {/* Interactive Favorite Wishlist Button */}
+          {onToggleFavorite && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite(e, card.id);
+              }}
+              title={isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+              className={cn(
+                "p-1 sm:p-1.5 border-2 border-black transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:scale-110 active:scale-95",
+                isFavorite 
+                  ? "bg-white text-red-600 hover:bg-neutral-100" 
+                  : "bg-white/90 hover:bg-white text-neutral-400 hover:text-red-500 opacity-80 group-hover:opacity-100"
+              )}
+            >
+              <Heart 
+                size={13} 
+                className={cn(
+                  "sm:w-3.5 sm:h-3.5 transition-colors",
+                  isFavorite ? "fill-red-500 text-red-500" : "fill-transparent"
+                )} 
+              />
+            </button>
+          )}
+        </div>
 
         {/* Stock / Limited Edition Badge */}
         <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 z-30 flex flex-col gap-1">

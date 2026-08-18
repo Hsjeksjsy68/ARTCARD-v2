@@ -26,6 +26,8 @@
     "$userId": {
       "email": "string",
       "collectionIds": ["string"],
+      "vaultIds": ["string"],
+      "favoriteIds": ["string"],
       "walletBalance": "number"
     }
   },
