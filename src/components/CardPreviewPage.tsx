@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FootballCard } from '../types';
 import { PriceChart } from './PriceChart';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, getDefaultStock, getDefaultMaxSupply } from '../lib/utils';
 import { 
   ArrowLeft, 
   TrendingUp, 
@@ -20,7 +20,11 @@ import {
   ExternalLink,
   CheckCircle2,
   ChevronRight,
-  Eye
+  Eye,
+  ShoppingCart,
+  Wallet,
+  AlertCircle,
+  PackageCheck
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -32,6 +36,10 @@ interface CardPreviewPageProps {
   onBack: () => void;
   onSelectRelatedCard: (card: FootballCard) => void;
   userEmail?: string | null;
+  walletBalance?: number;
+  onBuyCard?: (card: FootballCard) => void;
+  onOpenWallet?: () => void;
+  isBuying?: boolean;
 }
 
 export function CardPreviewPage({
@@ -41,10 +49,19 @@ export function CardPreviewPage({
   onToggleCollection,
   onBack,
   onSelectRelatedCard,
-  userEmail
+  userEmail,
+  walletBalance = 0,
+  onBuyCard,
+  onOpenWallet,
+  isBuying = false
 }: CardPreviewPageProps) {
   const [copiedLink, setCopiedLink] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+
+  const stock = getDefaultStock(card);
+  const maxSupply = getDefaultMaxSupply(card);
+  const isSoldOut = stock <= 0;
+  const canAfford = walletBalance >= card.currentPrice;
 
   // Price analysis
   const firstPrice = card.priceHistory && card.priceHistory.length > 0 
@@ -83,6 +100,14 @@ export function CardPreviewPage({
         </button>
 
         <div className="flex items-center gap-3">
+          {onOpenWallet && (
+            <button
+              onClick={onOpenWallet}
+              className="flex items-center gap-2 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-4 py-2 text-xs font-black uppercase tracking-widest transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <Wallet size={16} /> BALANCE: {formatCurrency(walletBalance)}
+            </button>
+          )}
           <button
             onClick={handleShare}
             className="flex items-center gap-2 bg-white hover:bg-[#D4FF00] text-black border-2 border-black px-4 py-2 text-xs font-black uppercase tracking-widest transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
@@ -156,25 +181,79 @@ export function CardPreviewPage({
               </span>
             </div>
 
+            {/* Direct Buy Card Button with Wallet */}
+            {onBuyCard && (
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    if (isSoldOut) return;
+                    if (!canAfford && onOpenWallet) {
+                      onOpenWallet();
+                    } else {
+                      onBuyCard(card);
+                    }
+                  }}
+                  disabled={isSoldOut || isBuying}
+                  className={cn(
+                    "w-full py-4 px-6 border-2 font-black text-sm tracking-widest uppercase flex items-center justify-center gap-3 transition-all shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]",
+                    isSoldOut
+                      ? "bg-neutral-200 text-neutral-500 border-neutral-400 cursor-not-allowed"
+                      : inCollection
+                      ? "bg-black text-[#D4FF00] hover:bg-neutral-900 border-black"
+                      : canAfford
+                      ? "bg-[#D4FF00] text-black border-black hover:bg-black hover:text-[#D4FF00]"
+                      : "bg-white text-black border-black hover:bg-[#D4FF00]"
+                  )}
+                >
+                  {isBuying ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                      PROCESSING PURCHASE...
+                    </div>
+                  ) : isSoldOut ? (
+                    <>
+                      <AlertCircle size={20} />
+                      OUT OF STOCK / SOLD OUT
+                    </>
+                  ) : inCollection ? (
+                    <>
+                      <PackageCheck size={20} />
+                      BUY ANOTHER COPY ({formatCurrency(card.currentPrice)})
+                    </>
+                  ) : canAfford ? (
+                    <>
+                      <ShoppingCart size={20} />
+                      BUY DIRECT CARD ({formatCurrency(card.currentPrice)})
+                    </>
+                  ) : (
+                    <>
+                      <Wallet size={20} />
+                      TOP UP & BUY ({formatCurrency(card.currentPrice)})
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
             {/* Quick Toggle Add to Collection Button */}
             <button
               onClick={() => onToggleCollection(card.id)}
               className={cn(
-                "w-full py-4 px-6 border-2 font-black text-sm tracking-widest uppercase flex items-center justify-center gap-3 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]",
+                "w-full py-3.5 px-6 border-2 font-black text-xs tracking-widest uppercase flex items-center justify-center gap-3 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]",
                 inCollection 
-                  ? "bg-black text-[#D4FF00] border-black hover:bg-neutral-900" 
-                  : "bg-[#D4FF00] text-black border-black hover:bg-black hover:text-[#D4FF00]"
+                  ? "bg-neutral-100 text-black border-black hover:bg-black hover:text-white" 
+                  : "bg-white text-black border-black hover:bg-neutral-100"
               )}
             >
               {inCollection ? (
                 <>
-                  <Check size={20} strokeWidth={3} />
+                  <Check size={16} strokeWidth={3} className="text-emerald-600" />
                   IN YOUR FAVORITES / VAULT
                 </>
               ) : (
                 <>
-                  <Plus size={20} strokeWidth={3} />
-                  ADD TO FAVORITES / VAULT
+                  <Plus size={16} strokeWidth={3} />
+                  ADD TO FAVORITES LIST
                 </>
               )}
             </button>
@@ -226,8 +305,32 @@ export function CardPreviewPage({
                 <div className="text-sm font-black text-black">#{card.cardNumber}</div>
               </div>
               <div className="bg-neutral-50 border-2 border-black p-3">
-                <div className="text-[9px] font-black uppercase text-neutral-500">RARITY</div>
-                <div className="text-sm font-black text-black truncate">{card.rarity}</div>
+                <div className="text-[9px] font-black uppercase text-neutral-500">SUPPLY LIMIT</div>
+                <div className={cn(
+                  "text-sm font-black truncate",
+                  isSoldOut ? "text-red-600" : "text-black"
+                )}>
+                  {isSoldOut ? 'SOLD OUT' : `${stock} / ${maxSupply} LEFT`}
+                </div>
+              </div>
+            </div>
+
+            {/* Supply Limitation Status Bar */}
+            <div className="bg-neutral-100 border-2 border-black p-4 space-y-2">
+              <div className="flex items-center justify-between text-xs font-black uppercase">
+                <span>ONLINE CARD SUPPLY & AVAILABILITY</span>
+                <span className={isSoldOut ? 'text-red-600' : 'text-emerald-700'}>
+                  {isSoldOut ? '0 COPIES REMAINING' : `${stock} OF ${maxSupply} AVAILABLE`}
+                </span>
+              </div>
+              <div className="w-full h-3 bg-neutral-300 border border-black overflow-hidden">
+                <div 
+                  className={cn(
+                    "h-full transition-all duration-500",
+                    isSoldOut ? "bg-red-500 w-0" : "bg-[#D4FF00]"
+                  )}
+                  style={{ width: `${Math.min(100, Math.max(5, (stock / maxSupply) * 100))}%` }}
+                />
               </div>
             </div>
           </div>
@@ -258,68 +361,58 @@ export function CardPreviewPage({
                 <p className="text-[10px] text-neutral-500 font-black uppercase tracking-widest mb-1">
                   6-MONTH MOMENTUM
                 </p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className={cn(
-                    "text-2xl sm:text-3xl font-black flex items-center gap-1 tracking-tight",
-                    isPositive ? "text-emerald-600" : "text-red-600"
+                <div className="flex items-center gap-2">
+                  {isPositive ? (
+                    <TrendingUp className="text-emerald-600" size={24} />
+                  ) : (
+                    <TrendingDown className="text-rose-600" size={24} />
+                  )}
+                  <p className={cn(
+                    "text-2xl sm:text-3xl font-black tracking-tight",
+                    isPositive ? "text-emerald-600" : "text-rose-600"
                   )}>
-                    {isPositive ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
                     {isPositive ? '+' : ''}{priceChangePercent.toFixed(1)}%
-                  </span>
+                  </p>
                 </div>
               </div>
 
               <div className="bg-white border-2 border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                 <p className="text-[10px] text-neutral-500 font-black uppercase tracking-widest mb-1">
-                  HISTORIC RANGE (LOW / HIGH)
+                  HISTORICAL RANGE
                 </p>
-                <p className="text-sm sm:text-base font-black text-black mt-2">
+                <p className="text-lg font-black text-black">
                   {formatCurrency(minHistoricalPrice)} - {formatCurrency(maxHistoricalPrice)}
                 </p>
               </div>
             </div>
 
-            {/* Interactive Price History Chart */}
-            <div className="border-2 border-black p-4 sm:p-6 bg-neutral-50">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-                <h3 className="text-xs font-black text-neutral-800 uppercase tracking-widest">
-                  HISTORICAL PRICE PERFORMANCE
-                </h3>
-                <span className="text-[10px] font-black uppercase text-neutral-500">
-                  {card.priceHistory?.length || 0} TRACKED TRANSACTION INTERVALS
-                </span>
-              </div>
-              <div className="h-64 sm:h-72 w-full">
-                <PriceChart data={card.priceHistory} />
-              </div>
+            {/* Price Chart */}
+            <div className="pt-4">
+              <PriceChart data={card.priceHistory || []} />
             </div>
+
           </div>
 
-          {/* Related Cards Shelf */}
+          {/* Related Cards Grid */}
           {relatedCards.length > 0 && (
             <div className="bg-white border-4 border-black p-6 sm:p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] space-y-4">
-              <div className="flex items-center justify-between border-b-2 border-black pb-3">
-                <h3 className="text-lg font-black uppercase tracking-tight text-black">
-                  MORE FROM {card.team.toUpperCase()} & SIMILAR SETS
-                </h3>
-                <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">
-                  DISCOVER RELATED CARDS
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2">
-                {relatedCards.map((relCard) => (
+              <h3 className="text-lg font-black uppercase tracking-tight text-black">
+                SIMILAR CARDS IN DATABASE
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {relatedCards.map(relCard => (
                   <div
                     key={relCard.id}
                     onClick={() => onSelectRelatedCard(relCard)}
-                    className="border-2 border-black p-2 bg-neutral-50 hover:bg-[#D4FF00] hover:-translate-y-1 transition-all cursor-pointer group shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+                    className="cursor-pointer border-2 border-black p-2 hover:bg-[#D4FF00] transition-colors group"
                   >
-                    <div className="aspect-[750/1050] bg-white border border-black overflow-hidden mb-2">
-                      <img src={relCard.imageUrl} alt={relCard.player} className="w-full h-full object-cover" />
+                    <div className="aspect-[750/1050] bg-neutral-100 border border-black mb-2 overflow-hidden">
+                      {relCard.imageUrl ? (
+                        <img src={relCard.imageUrl} alt={relCard.player} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      ) : null}
                     </div>
-                    <div className="text-[9px] text-neutral-500 font-black uppercase truncate">{relCard.team}</div>
-                    <div className="text-xs font-black text-black uppercase truncate group-hover:text-black">{relCard.player}</div>
-                    <div className="text-[10px] font-black text-black mt-1">{formatCurrency(relCard.currentPrice)}</div>
+                    <p className="text-xs font-black uppercase truncate">{relCard.player}</p>
+                    <p className="text-[10px] font-bold text-neutral-500 uppercase">{formatCurrency(relCard.currentPrice)}</p>
                   </div>
                 ))}
               </div>

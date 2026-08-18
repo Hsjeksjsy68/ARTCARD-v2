@@ -9,9 +9,10 @@ import { PackShop } from './components/PackShop';
 import { UserAuth } from './components/UserAuth';
 import { CustomCard } from './components/CustomCard';
 import { UserProfile } from './components/UserProfile';
+import { WalletModal } from './components/WalletModal';
 import { FootballCard, Pack } from './types';
-import { formatCurrency } from './lib/utils';
-import { db, auth, onAuthStateChanged, collection, doc, setDoc, getDoc, User, deleteDoc, onSnapshot, getDocs, increment } from './lib/firebase';
+import { formatCurrency, getDefaultStock } from './lib/utils';
+import { db, auth, onAuthStateChanged, collection, doc, setDoc, getDoc, User, deleteDoc, onSnapshot, getDocs, increment, updateDoc, addDoc } from './lib/firebase';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'database' | 'collection' | 'admin' | 'manage' | 'shop' | 'custom' | 'profile'>('database');
@@ -34,6 +35,9 @@ export default function App() {
   
   const [user, setUser] = useState<User | null>(null);
   const [collectionIds, setCollectionIds] = useState<Set<string>>(new Set());
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [isWalletOpen, setIsWalletOpen] = useState(false);
+  const [isBuyingCard, setIsBuyingCard] = useState(false);
   const [cards, setCards] = useState<FootballCard[]>([]);
   const [loadingCards, setLoadingCards] = useState(true);
   const [packs, setPacks] = useState<Pack[]>([]);
@@ -43,22 +47,27 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Load user's collection
+        // Load user's collection and wallet balance
         const userRef = doc(db, 'users', currentUser.uid);
         const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
-            setCollectionIds(new Set(docSnap.data().collectionIds || []));
+            const data = docSnap.data();
+            setCollectionIds(new Set(data.collectionIds || []));
+            setWalletBalance(data.walletBalance || 0);
           } else {
             setCollectionIds(new Set());
+            setWalletBalance(0);
           }
         });
         return () => unsubscribeUser();
       } else {
         setCollectionIds(new Set());
+        setWalletBalance(0);
       }
     });
     return () => unsubscribe();
   }, []);
+
 
   useEffect(() => {
     setLoadingCards(true);
@@ -207,6 +216,67 @@ export default function App() {
       return next;
     });
   };
+
+  const handleBuyDirectCard = async (card: FootballCard) => {
+    if (!user) {
+      setToastMessage("Please sign in to purchase cards.");
+      switchTab('profile');
+      return;
+    }
+
+    const currentStock = getDefaultStock(card);
+    if (currentStock <= 0) {
+      setToastMessage("Sorry, this card is currently out of stock.");
+      return;
+    }
+
+    if (walletBalance < card.currentPrice) {
+      setToastMessage("Insufficient wallet balance. Please top up.");
+      setIsWalletOpen(true);
+      return;
+    }
+
+    setIsBuyingCard(true);
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const cardRef = doc(db, 'cards', card.id);
+
+      // 1. Deduct balance and add card to user collection
+      const nextCollection = new Set(collectionIds);
+      nextCollection.add(card.id);
+
+      await setDoc(userRef, {
+        email: user.email,
+        walletBalance: increment(-card.currentPrice),
+        collectionIds: Array.from(nextCollection)
+      }, { merge: true });
+
+      // 2. Decrement stock from database
+      await updateDoc(cardRef, {
+        stock: increment(-1)
+      });
+
+      // 3. Record transaction
+      const txRef = collection(db, 'transactions');
+      await addDoc(txRef, {
+        userId: user.uid,
+        userEmail: user.email || 'Anonymous',
+        type: 'card_purchase',
+        amount: card.currentPrice,
+        description: `Purchased card: ${card.player} (${card.rarity})`,
+        timestamp: Date.now()
+      });
+
+      setCollectionIds(nextCollection);
+      setToastMessage(`🎉 Successfully purchased ${card.player} for ${formatCurrency(card.currentPrice)}!`);
+    } catch (err: any) {
+      console.error("Purchase error:", err);
+      setToastMessage(`Purchase failed: ${err.message || 'Please try again.'}`);
+    } finally {
+      setIsBuyingCard(false);
+    }
+  };
+
 
   const handleAddCard = async (newCard: FootballCard) => {
     try {
@@ -411,10 +481,25 @@ export default function App() {
             </nav>
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="hidden sm:flex flex-col items-end mr-2">
-              <span className="text-[10px] text-neutral-500 uppercase tracking-widest font-black mb-1">Portfolio Value</span>
-              <span className="text-sm font-black text-black bg-white px-3 py-1 border-2 border-black">{formatCurrency(collectionValue)}</span>
+          <div className="flex items-center gap-4 sm:gap-6">
+            {/* Wallet Quick Balance & Top-Up Button */}
+            <button
+              onClick={() => {
+                if (!user) {
+                  switchTab('profile');
+                } else {
+                  setIsWalletOpen(true);
+                }
+              }}
+              className="flex items-center gap-2 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <DollarSign size={14} strokeWidth={3} />
+              <span>{user ? formatCurrency(walletBalance) : 'TOP UP ৳'}</span>
+            </button>
+
+            <div className="hidden sm:flex flex-col items-end mr-1">
+              <span className="text-[10px] text-neutral-500 uppercase tracking-widest font-black mb-0.5">Portfolio Value</span>
+              <span className="text-xs font-black text-black bg-neutral-100 px-2.5 py-0.5 border border-black">{formatCurrency(collectionValue)}</span>
             </div>
             <UserAuth 
               user={user} 
@@ -422,6 +507,7 @@ export default function App() {
               isProfileActive={activeTab === 'profile' && !selectedCard} 
             />
           </div>
+
         </div>
       </header>
 
@@ -495,6 +581,10 @@ export default function App() {
             onBack={() => setSelectedCard(null)}
             onSelectRelatedCard={(relCard) => handleSelectCard(relCard)}
             userEmail={user?.email}
+            walletBalance={walletBalance}
+            onBuyCard={handleBuyDirectCard}
+            onOpenWallet={() => setIsWalletOpen(true)}
+            isBuying={isBuyingCard}
           />
         ) : activeTab === 'profile' ? (
           <UserProfile
@@ -524,8 +614,17 @@ export default function App() {
             </div>
           )
         ) : activeTab === 'shop' ? (
-          <PackShop cards={cards} packs={packs} onCardsDrawn={handleCardsDrawn} />
+          <PackShop 
+            cards={cards} 
+            packs={packs} 
+            user={user}
+            walletBalance={walletBalance}
+            onOpenWallet={() => setIsWalletOpen(true)}
+            onOpenAuth={() => switchTab('profile')}
+            onCardsDrawn={handleCardsDrawn} 
+          />
         ) : activeTab === 'custom' ? (
+
           <CustomCard themes={themes} />
         ) : (
           <>
@@ -817,6 +916,22 @@ export default function App() {
           {toastMessage}
         </div>
       )}
+
+      {/* Wallet Top-Up Modal */}
+      <WalletModal
+        isOpen={isWalletOpen}
+        onClose={() => setIsWalletOpen(false)}
+        user={user}
+        walletBalance={walletBalance}
+        onTopUpSuccess={(amount) => {
+          setToastMessage(`🎉 Wallet credited with ${formatCurrency(amount)}!`);
+        }}
+        onOpenAuth={() => {
+          setIsWalletOpen(false);
+          switchTab('profile');
+        }}
+      />
     </div>
   );
 }
+

@@ -400,8 +400,9 @@ export function UserProfile({
             {topValuedCard ? topValuedCard.player : 'NONE YET'}
           </div>
           <div className="text-[9px] font-black uppercase tracking-widest text-neutral-600 mt-2">
-            {topValuedCard ? formatCurrency(topValuedCard.currentPrice) : '$0.00'}
+            {topValuedCard ? formatCurrency(topValuedCard.currentPrice) : formatCurrency(0)}
           </div>
+
         </div>
 
         <div className="bg-white border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between">

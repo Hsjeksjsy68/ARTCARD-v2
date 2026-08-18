@@ -12,6 +12,8 @@
       "imageUrl": "string",
       "imageGradient": "string",
       "currentPrice": "number",
+      "stock": "number",
+      "maxSupply": "number",
       "priceHistory": [
         {
           "date": "string",
@@ -23,7 +25,18 @@
   "users": {
     "$userId": {
       "email": "string",
-      "collectionIds": ["string"]
+      "collectionIds": ["string"],
+      "walletBalance": "number"
+    }
+  },
+  "transactions": {
+    "$transactionId": {
+      "userId": "string",
+      "userEmail": "string",
+      "type": "string",
+      "amount": "number",
+      "description": "string",
+      "timestamp": "number"
     }
   }
 }

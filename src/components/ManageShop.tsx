@@ -1,8 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { FootballCard, Pack } from '../types';
-import { Edit2, Trash2, X, Check, Search, Plus, Image as ImageIcon, AlertTriangle } from 'lucide-react';
-import { db, doc, deleteDoc, updateDoc, setDoc, collection, getDocs } from '../lib/firebase';
-import { formatCurrency } from '../lib/utils';
+import { 
+  Edit2, 
+  Trash2, 
+  X, 
+  Check, 
+  Search, 
+  Plus, 
+  Image as ImageIcon, 
+  AlertTriangle, 
+  Users, 
+  Wallet, 
+  PackageCheck, 
+  History, 
+  Layers, 
+  Eye, 
+  Minus, 
+  RefreshCw,
+  Sparkles,
+  ShieldAlert
+} from 'lucide-react';
+import { db, doc, deleteDoc, updateDoc, setDoc, collection, getDocs, onSnapshot, User } from '../lib/firebase';
+
+import { formatCurrency, getDefaultStock, getDefaultMaxSupply } from '../lib/utils';
 import { cardsDatabase } from '../data';
 
 interface ManageShopProps {
@@ -11,8 +31,26 @@ interface ManageShopProps {
   themes: any[];
 }
 
+interface UserRecord {
+  id: string;
+  email: string;
+  walletBalance?: number;
+  collectionIds?: string[];
+}
+
+interface TransactionRecord {
+  id: string;
+  userId: string;
+  userEmail?: string;
+  type: string;
+  amount: number;
+  description: string;
+  timestamp: number;
+  paymentMethod?: string;
+}
+
 export function ManageShop({ cards, packs, themes }: ManageShopProps) {
-  const [activeTab, setActiveTab] = useState<'cards' | 'packs' | 'themes'>('cards');
+  const [activeTab, setActiveTab] = useState<'cards' | 'inventory' | 'packs' | 'transactions'>('cards');
   
   // Cards State
   const [editingCard, setEditingCard] = useState<FootballCard | null>(null);
@@ -30,12 +68,68 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
   const [editingPack, setEditingPack] = useState<Pack | null>(null);
   const [packEditForm, setPackEditForm] = useState<Partial<Pack>>({});
   
-  // Themes State
-  const [editingTheme, setEditingTheme] = useState<any | null>(null);
-  const [themeEditForm, setThemeEditForm] = useState<any>({});
-  
+  // User Inventory Tracker State
+  const [usersList, setUsersList] = useState<UserRecord[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
+  const [cardHoldersSearch, setCardHoldersSearch] = useState('');
+  const [selectedCardForHolders, setSelectedCardForHolders] = useState<FootballCard | null>(null);
+
+  // Transactions State
+  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const [isLoadingTx, setIsLoadingTx] = useState(false);
+
   const [confirmReset, setConfirmReset] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+
+  // Fetch Users for Inventory Tracking
+  useEffect(() => {
+    if (activeTab === 'inventory') {
+      fetchUsers();
+    } else if (activeTab === 'transactions') {
+      fetchTransactions();
+    }
+  }, [activeTab]);
+
+  const fetchUsers = async () => {
+    setIsLoadingUsers(true);
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      const list: UserRecord[] = snap.docs.map(d => ({
+        id: d.id,
+        email: d.data().email || 'Anonymous Collector',
+        walletBalance: d.data().walletBalance || 0,
+        collectionIds: d.data().collectionIds || []
+      }));
+      setUsersList(list);
+    } catch (err) {
+      console.error("Error fetching users:", err);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  const fetchTransactions = async () => {
+    setIsLoadingTx(true);
+    try {
+      const snap = await getDocs(collection(db, 'transactions'));
+      const list: TransactionRecord[] = snap.docs.map(d => ({
+        id: d.id,
+        userId: d.data().userId,
+        userEmail: d.data().userEmail || 'Unknown User',
+        type: d.data().type || 'tx',
+        amount: d.data().amount || 0,
+        description: d.data().description || 'Transaction',
+        timestamp: d.data().timestamp || Date.now(),
+        paymentMethod: d.data().paymentMethod
+      })).sort((a, b) => b.timestamp - a.timestamp);
+      setTransactions(list);
+    } catch (err) {
+      console.error("Error fetching transactions:", err);
+    } finally {
+      setIsLoadingTx(false);
+    }
+  };
 
   const uniqueTeams = Array.from(new Set(cards.map(c => c.team).filter(Boolean))).sort();
   const uniquePositions = Array.from(new Set(cards.map(c => c.position).filter(Boolean))).sort();
@@ -59,9 +153,9 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
 
   // Default packs if none exist
   const defaultPacks: Pack[] = [
-    { id: 'starter', name: 'STARTER PACK', size: 3, price: 250, color: 'bg-white' },
-    { id: 'pro', name: 'PRO PACK', size: 5, price: 500, color: 'bg-[#D4FF00]' },
-    { id: 'elite', name: 'ELITE PACK', size: 7, price: 1200, color: 'bg-black text-white' }
+    { id: 'starter', name: 'STARTER PACK', size: 3, price: 250, color: 'bg-white', rarityOdds: { base: 80, silver: 18, gold: 2, shield: 0 } },
+    { id: 'pro', name: 'PRO PACK', size: 5, price: 500, color: 'bg-[#D4FF00]', rarityOdds: { base: 60, silver: 30, gold: 9, shield: 1 } },
+    { id: 'elite', name: 'ELITE PACK', size: 7, price: 1200, color: 'bg-black text-white', rarityOdds: { base: 40, silver: 40, gold: 17, shield: 3 } }
   ];
 
   const currentPacks = packs.length > 0 ? packs : defaultPacks;
@@ -80,7 +174,23 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
 
   const handleEditCard = (card: FootballCard) => {
     setEditingCard(card);
-    setEditForm(card);
+    setEditForm({
+      ...card,
+      stock: getDefaultStock(card),
+      maxSupply: getDefaultMaxSupply(card)
+    });
+  };
+
+  const handleQuickStockAdjust = async (card: FootballCard, delta: number) => {
+    const currentStock = getDefaultStock(card);
+    const newStock = Math.max(0, currentStock + delta);
+    try {
+      await updateDoc(doc(db, "cards", card.id), {
+        stock: newStock
+      });
+    } catch (err) {
+      console.error("Stock update failed:", err);
+    }
   };
 
   const handleSaveCard = async () => {
@@ -91,6 +201,8 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
       const updatedForm = { ...editForm };
       updatedForm.currentPrice = Number(updatedForm.currentPrice);
       updatedForm.year = Number(updatedForm.year);
+      updatedForm.stock = Number(updatedForm.stock);
+      updatedForm.maxSupply = Number(updatedForm.maxSupply);
       
       if (updatedForm.currentPrice !== editingCard.currentPrice) {
         const newHistory = [...(updatedForm.priceHistory || [])];
@@ -116,7 +228,9 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
     const { name, value } = e.target;
     setEditForm(prev => ({
       ...prev,
-      [name]: name === 'year' || name === 'currentPrice' ? Number(value) : value
+      [name]: name === 'year' || name === 'currentPrice' || name === 'stock' || name === 'maxSupply' 
+        ? Number(value) 
+        : value
     }));
   };
 
@@ -131,8 +245,9 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
       id: `pack_${Date.now()}`,
       name: 'NEW PACK',
       size: 5,
-      price: 10,
+      price: 500,
       color: 'bg-white',
+      rarityOdds: { base: 60, silver: 30, gold: 9, shield: 1 }
     };
     setEditingPack(newPack);
     setPackEditForm(newPack);
@@ -172,117 +287,14 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
     }));
   };
 
-  const handlePackImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          
-          const MAX_WIDTH = 750;
-          const MAX_HEIGHT = 1050;
-          
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
-          setPackEditForm(prev => ({ ...prev, coverPhotoUrl: compressedDataUrl }));
-        };
-        img.src = reader.result as string;
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Theme Handlers
-  const handleEditTheme = (theme: any) => {
-    setEditingTheme(theme);
-    setThemeEditForm(theme);
-  };
-
-  const handleCreateTheme = () => {
-    const newTheme = {
-      id: `theme_${Date.now()}`,
-      name: 'NEW THEME',
-      overlayImageUrl: '',
-      clubLogoUrl: '',
-      clubLogoSize: 80,
-      clubLogoTop: 6,
-      clubLogoLeft: 6,
-      editionLogoUrl: '',
-      editionLogoSize: 80,
-      editionLogoTop: 6,
-      editionLogoLeft: 80,
-      fontBase64: '',
-      fontName: 'CustomFont',
-      fontColor: '#ffffff',
-      fontSize: 48,
-      fontPositionBottom: 5,
-      fontScaleX: 1,
-      fontScaleY: 1,
-    };
-    setEditingTheme(newTheme);
-    setThemeEditForm(newTheme);
-  };
-
-  const handleSaveTheme = async () => {
-    if (!editingTheme) return;
-    setIsSaving(true);
-    try {
-      const themeRef = doc(db, "themes", editingTheme.id);
-      await setDoc(themeRef, themeEditForm, { merge: true });
-      setEditingTheme(null);
-    } catch (error) {
-      console.error("Error updating theme:", error);
-      alert("Failed to update theme.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeleteTheme = async (theme: any) => {
-    if (window.confirm(`Are you sure you want to delete ${theme.name}?`)) {
-      try {
-        await deleteDoc(doc(db, "themes", theme.id));
-      } catch (error) {
-        console.error("Error deleting theme:", error);
-        alert("Failed to delete theme.");
+  const handlePackOddsChange = (rarity: 'base' | 'silver' | 'gold' | 'shield', value: number) => {
+    setPackEditForm(prev => ({
+      ...prev,
+      rarityOdds: {
+        ...(prev.rarityOdds || { base: 60, silver: 30, gold: 9, shield: 1 }),
+        [rarity]: Number(value)
       }
-    }
-  };
-
-  const handleChangeTheme = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setThemeEditForm((prev: any) => ({ ...prev, [name]: value }));
-  };
-
-  const handleThemeImageChange = (e: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setThemeEditForm((prev: any) => ({ ...prev, [fieldName]: reader.result }));
-      };
-      reader.readAsDataURL(file);
-    }
+    }));
   };
 
   const handleResetDatabase = async () => {
@@ -301,7 +313,11 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
       // 2. Insert default cards
       const cardAdds = cardsDatabase.map(card => {
         const { id, ...cardData } = card;
-        return setDoc(doc(db, 'cards', id), cardData);
+        return setDoc(doc(db, 'cards', id), {
+          ...cardData,
+          stock: getDefaultStock(card),
+          maxSupply: getDefaultMaxSupply(card)
+        });
       });
       await Promise.all(cardAdds);
       
@@ -312,14 +328,14 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
       
       // 4. Insert default packs
       const defaultPacks = [
-        { id: 'standard', name: 'Standard Pack', price: 10, size: 5, color: 'bg-neutral-100', probability: { base: 0.8, silver: 0.15, gold: 0.04, shield: 0.01 } },
-        { id: 'premium', name: 'Premium Pack', price: 25, size: 5, color: 'bg-neutral-200', probability: { base: 0.6, silver: 0.25, gold: 0.1, shield: 0.05 } },
-        { id: 'elite', name: 'Elite Pack', price: 100, size: 3, color: 'bg-black text-white', probability: { base: 0.3, silver: 0.4, gold: 0.2, shield: 0.1 } }
+        { id: 'starter', name: 'STARTER PACK', price: 250, size: 3, color: 'bg-white', rarityOdds: { base: 80, silver: 18, gold: 2, shield: 0 } },
+        { id: 'pro', name: 'PRO PACK', price: 500, size: 5, color: 'bg-[#D4FF00]', rarityOdds: { base: 60, silver: 30, gold: 9, shield: 1 } },
+        { id: 'elite', name: 'ELITE PACK', price: 1200, size: 7, color: 'bg-black text-white', rarityOdds: { base: 40, silver: 40, gold: 17, shield: 3 } }
       ];
       const packAdds = defaultPacks.map(pack => setDoc(doc(db, 'packs', pack.id), pack));
       await Promise.all(packAdds);
       
-      alert("Database reset successfully.");
+      alert("Database reset successfully with fresh stock & packs.");
       setConfirmReset(false);
     } catch (err) {
       console.error(err);
@@ -330,266 +346,570 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
-      <div className="bg-red-50 border-2 border-red-500 p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-[8px_8px_0px_0px_rgba(239,68,68,1)]">
+    <div className="max-w-6xl mx-auto space-y-8">
+      {/* Danger Zone Reset Notice */}
+      <div className="bg-red-50 border-2 border-red-500 p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-[6px_6px_0px_0px_rgba(239,68,68,1)]">
         <div>
           <h3 className="text-xl font-black text-red-600 uppercase tracking-tighter flex items-center gap-2">
-            <AlertTriangle size={24} /> Danger Zone
+            <AlertTriangle size={24} /> Admin Database Controls
           </h3>
-          <p className="text-red-700 font-bold text-sm tracking-widest uppercase mt-2">
-            Reset database to default demo data. This removes all custom cards and packs. Users are not affected.
+          <p className="text-red-700 font-bold text-xs tracking-widest uppercase mt-1">
+            Reset cards, supply limits, and packs to standard demo state. User accounts and wallets are preserved.
           </p>
         </div>
         <button
           onClick={handleResetDatabase}
           disabled={isResetting}
-          className={`shrink-0 px-6 py-3 font-black uppercase tracking-widest border-2 border-red-600 transition-colors ${
+          className={`shrink-0 px-6 py-3 font-black uppercase tracking-widest border-2 border-red-600 transition-colors text-xs ${
             confirmReset ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-white text-red-600 hover:bg-red-50'
           }`}
         >
-          {isResetting ? 'Resetting...' : confirmReset ? 'Are you sure?' : 'Reset Database'}
+          {isResetting ? 'Resetting...' : confirmReset ? 'CONFIRM RESET DB?' : 'RESET DATABASE'}
         </button>
       </div>
 
-      <div className="bg-white border-2 border-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+      {/* Main Admin Card */}
+      <div className="bg-white border-4 border-black p-6 sm:p-8 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
+        {/* Navigation Tabs */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 border-b-2 border-black pb-6">
-          <h2 className="text-3xl font-black uppercase tracking-tighter">Shop Admin Panel</h2>
-          <div className="flex gap-4">
+          <div>
+            <h2 className="text-3xl font-black uppercase tracking-tighter">CONTROL ROOM & INVENTORY</h2>
+            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mt-0.5">
+              DATABASE STOCK CONTROL & USER HOLDINGS AUDIT
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setActiveTab('cards')}
-              className={`px-6 py-2 font-black uppercase tracking-widest border-2 border-black transition-colors ${
-                activeTab === 'cards' ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+              className={`px-4 py-2 text-xs font-black uppercase tracking-widest border-2 border-black transition-colors ${
+                activeTab === 'cards' ? 'bg-black text-[#D4FF00]' : 'bg-white text-black hover:bg-neutral-100'
               }`}
             >
-              Cards
+              CARDS & STOCK ({cards.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('inventory')}
+              className={`px-4 py-2 text-xs font-black uppercase tracking-widest border-2 border-black transition-colors flex items-center gap-1.5 ${
+                activeTab === 'inventory' ? 'bg-black text-[#D4FF00]' : 'bg-white text-black hover:bg-neutral-100'
+              }`}
+            >
+              <Users size={14} /> USER HOLDINGS
             </button>
             <button
               onClick={() => setActiveTab('packs')}
-              className={`px-6 py-2 font-black uppercase tracking-widest border-2 border-black transition-colors ${
-                activeTab === 'packs' ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+              className={`px-4 py-2 text-xs font-black uppercase tracking-widest border-2 border-black transition-colors ${
+                activeTab === 'packs' ? 'bg-black text-[#D4FF00]' : 'bg-white text-black hover:bg-neutral-100'
               }`}
             >
-              Physical Packs
+              PACK CONFIG ({currentPacks.length})
             </button>
             <button
-              onClick={() => setActiveTab('themes')}
-              className={`px-6 py-2 font-black uppercase tracking-widest border-2 border-black transition-colors ${
-                activeTab === 'themes' ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+              onClick={() => setActiveTab('transactions')}
+              className={`px-4 py-2 text-xs font-black uppercase tracking-widest border-2 border-black transition-colors flex items-center gap-1.5 ${
+                activeTab === 'transactions' ? 'bg-black text-[#D4FF00]' : 'bg-white text-black hover:bg-neutral-100'
               }`}
             >
-              Themes
+              <History size={14} /> WALLET LOGS
             </button>
           </div>
         </div>
         
+        {/* TAB 1: CARDS & STOCK MANAGEMENT */}
         {activeTab === 'cards' && (
-          <div>
-            <div className="flex flex-col mb-6 gap-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h3 className="text-xl font-black uppercase tracking-widest">Manage Inventory</h3>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                    <Search size={16} className="text-neutral-500" />
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="SEARCH CARDS..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full sm:w-64 bg-neutral-100 border-2 border-black py-2 pl-10 pr-4 text-xs font-black text-black placeholder-neutral-500 focus:outline-none focus:bg-white transition-colors uppercase tracking-widest"
-                  />
-                </div>
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-widest">CARDS IN DATABASE</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                  Control active market prices, stock limitation, and max supply.
+                </p>
               </div>
-              <div className="flex flex-wrap gap-4">
-                <select 
-                  value={filterTeam} 
-                  onChange={(e) => setFilterTeam(e.target.value)}
-                  className="bg-neutral-100 border-2 border-black py-2 px-4 text-xs font-black text-black focus:outline-none focus:bg-white transition-colors uppercase tracking-widest"
-                >
-                  <option value="">ALL TEAMS</option>
-                  {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <select 
-                  value={filterPosition} 
-                  onChange={(e) => setFilterPosition(e.target.value)}
-                  className="bg-neutral-100 border-2 border-black py-2 px-4 text-xs font-black text-black focus:outline-none focus:bg-white transition-colors uppercase tracking-widest"
-                >
-                  <option value="">ALL POSITIONS</option>
-                  {uniquePositions.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-                <select 
-                  value={filterYear} 
-                  onChange={(e) => setFilterYear(e.target.value)}
-                  className="bg-neutral-100 border-2 border-black py-2 px-4 text-xs font-black text-black focus:outline-none focus:bg-white transition-colors uppercase tracking-widest"
-                >
-                  <option value="">ALL YEARS</option>
-                  {uniqueYears.map(y => <option key={y} value={y.toString()}>{y}</option>)}
-                </select>
-                <select 
-                  value={filterSet} 
-                  onChange={(e) => setFilterSet(e.target.value)}
-                  className="bg-neutral-100 border-2 border-black py-2 px-4 text-xs font-black text-black focus:outline-none focus:bg-white transition-colors uppercase tracking-widest"
-                >
-                  <option value="">ALL SETS</option>
-                  {uniqueSets.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <select 
-                  value={filterRarity} 
-                  onChange={(e) => setFilterRarity(e.target.value)}
-                  className="bg-neutral-100 border-2 border-black py-2 px-4 text-xs font-black text-black focus:outline-none focus:bg-white transition-colors uppercase tracking-widest"
-                >
-                  <option value="">ALL RARITIES</option>
-                  {uniqueRarities.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                  <Search size={16} className="text-neutral-500" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="SEARCH CARDS..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full sm:w-64 bg-neutral-100 border-2 border-black py-2 pl-10 pr-4 text-xs font-black text-black placeholder-neutral-500 focus:outline-none focus:bg-white transition-colors uppercase tracking-widest"
+                />
               </div>
             </div>
+
+            {/* Filter Bar */}
+            <div className="flex flex-wrap gap-2">
+              <select 
+                value={filterTeam} 
+                onChange={(e) => setFilterTeam(e.target.value)}
+                className="bg-neutral-100 border-2 border-black py-1.5 px-3 text-xs font-black text-black focus:outline-none focus:bg-white transition-colors uppercase tracking-widest"
+              >
+                <option value="">ALL TEAMS</option>
+                {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <select 
+                value={filterPosition} 
+                onChange={(e) => setFilterPosition(e.target.value)}
+                className="bg-neutral-100 border-2 border-black py-1.5 px-3 text-xs font-black text-black focus:outline-none focus:bg-white transition-colors uppercase tracking-widest"
+              >
+                <option value="">ALL POSITIONS</option>
+                {uniquePositions.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <select 
+                value={filterRarity} 
+                onChange={(e) => setFilterRarity(e.target.value)}
+                className="bg-neutral-100 border-2 border-black py-1.5 px-3 text-xs font-black text-black focus:outline-none focus:bg-white transition-colors uppercase tracking-widest"
+              >
+                <option value="">ALL RARITIES</option>
+                {uniqueRarities.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
             
-            <div className="overflow-x-auto">
+            {/* Table */}
+            <div className="overflow-x-auto border-2 border-black">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b-2 border-black bg-neutral-50">
-                    <th className="p-4 text-xs font-black uppercase tracking-widest text-neutral-500 w-16">Card</th>
-                    <th className="p-4 text-xs font-black uppercase tracking-widest text-neutral-500">Player</th>
-                    <th className="p-4 text-xs font-black uppercase tracking-widest text-neutral-500">Team</th>
-                    <th className="p-4 text-xs font-black uppercase tracking-widest text-neutral-500">Price</th>
-                    <th className="p-4 text-xs font-black uppercase tracking-widest text-neutral-500 text-right">Actions</th>
+                  <tr className="border-b-2 border-black bg-neutral-100 text-[10px] font-black uppercase tracking-widest">
+                    <th className="p-3">CARD</th>
+                    <th className="p-3">TEAM / POS</th>
+                    <th className="p-3">RARITY</th>
+                    <th className="p-3">PRICE</th>
+                    <th className="p-3 text-center">DATABASE STOCK / SUPPLY</th>
+                    <th className="p-3 text-right">ACTIONS</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {filteredCards.map(card => (
-                    <tr key={card.id} className="border-b-2 border-neutral-100 hover:bg-neutral-50 transition-colors">
-                      <td className="p-4">
-                        {card.imageUrl ? (
-                          <img src={card.imageUrl} alt={card.player} className="w-12 h-16 object-cover border-2 border-black" />
-                        ) : (
-                          <div className={`w-12 h-16 border-2 border-black bg-gradient-to-tr ${card.imageGradient || 'from-neutral-100 to-neutral-200'} flex items-center justify-center`}>
-                            <ImageIcon size={16} className="text-neutral-400" />
+                <tbody className="divide-y-2 divide-black text-xs font-bold">
+                  {filteredCards.map((card) => {
+                    const stock = getDefaultStock(card);
+                    const maxSupply = getDefaultMaxSupply(card);
+                    const isSoldOut = stock <= 0;
+
+                    return (
+                      <tr key={card.id} className="hover:bg-neutral-50 transition-colors">
+                        <td className="p-3 flex items-center gap-3">
+                          <div className="w-10 h-14 bg-neutral-200 border border-black overflow-hidden shrink-0 flex items-center justify-center">
+                            {card.imageUrl ? (
+                              <img src={card.imageUrl} alt={card.player} className="w-full h-full object-cover" />
+                            ) : (
+                              <ImageIcon size={16} className="text-neutral-400" />
+                            )}
                           </div>
-                        )}
-                      </td>
-                      <td className="p-4 font-bold">{card.player}</td>
-                      <td className="p-4 text-neutral-600">{card.team}</td>
-                      <td className="p-4 font-black">{formatCurrency(card.currentPrice)}</td>
-                      <td className="p-4 text-right space-x-2">
-                        <button 
-                          onClick={() => handleEditCard(card)}
-                          className="p-2 border-2 border-black hover:bg-[#D4FF00] transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteCard(card)}
-                          className="p-2 border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredCards.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="p-8 text-center text-neutral-500 font-bold uppercase tracking-widest">
-                        No cards found
-                      </td>
-                    </tr>
-                  )}
+                          <div>
+                            <div className="font-black uppercase">{card.player}</div>
+                            <div className="text-[10px] text-neutral-500 font-mono">#{card.cardNumber} • {card.year}</div>
+                          </div>
+                        </td>
+                        <td className="p-3 uppercase">
+                          <div>{card.team}</div>
+                          <div className="text-[10px] text-neutral-500">{card.position}</div>
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 text-[9px] font-black uppercase border border-black ${
+                            card.rarity === '1-of-1 Shield' ? 'bg-black text-[#D4FF00]' :
+                            card.rarity === 'Gold Autograph' ? 'bg-amber-300 text-black' :
+                            card.rarity === 'Silver Refractor' ? 'bg-slate-200 text-black' : 'bg-white text-black'
+                          }`}>
+                            {card.rarity}
+                          </span>
+                        </td>
+                        <td className="p-3 font-black text-sm">
+                          {formatCurrency(card.currentPrice)}
+                        </td>
+                        <td className="p-3 text-center">
+                          <div className="inline-flex items-center gap-2 bg-neutral-100 border border-black p-1">
+                            <button
+                              onClick={() => handleQuickStockAdjust(card, -1)}
+                              disabled={stock <= 0}
+                              className="w-6 h-6 bg-white hover:bg-black hover:text-white border border-black flex items-center justify-center font-black disabled:opacity-30"
+                            >
+                              -
+                            </button>
+                            <span className={`font-mono font-black text-xs px-2 ${isSoldOut ? 'text-red-600' : 'text-black'}`}>
+                              {stock} / {maxSupply}
+                            </span>
+                            <button
+                              onClick={() => handleQuickStockAdjust(card, 1)}
+                              className="w-6 h-6 bg-white hover:bg-black hover:text-white border border-black flex items-center justify-center font-black"
+                            >
+                              +
+                            </button>
+                          </div>
+                          {isSoldOut && (
+                            <span className="block text-[8px] font-black uppercase text-red-600 mt-1">
+                              OUT OF STOCK
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleEditCard(card)}
+                              className="p-1.5 bg-neutral-100 hover:bg-black hover:text-white border border-black transition-colors"
+                              title="Edit Full Card Details"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCard(card)}
+                              className="p-1.5 bg-red-100 hover:bg-red-600 hover:text-white border border-red-600 text-red-600 transition-colors"
+                              title="Delete Card"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {activeTab === 'packs' && (
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-              <h3 className="text-xl font-black uppercase tracking-widest">Manage Physical Packs</h3>
+        {/* TAB 2: USER INVENTORY & CARD OWNERSHIP TRACKER */}
+        {activeTab === 'inventory' && (
+          <div className="space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-widest">COLLECTOR AUDIT & HOLDINGS</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                  Inspect which users own which cards, and track how many copies are held across the platform.
+                </p>
+              </div>
               <button
-                onClick={handleCreatePack}
-                className="flex items-center gap-2 bg-[#D4FF00] text-black border-2 border-black px-4 py-2 font-black uppercase tracking-widest hover:bg-black hover:text-white transition-colors text-sm"
+                onClick={fetchUsers}
+                className="flex items-center gap-2 bg-neutral-100 hover:bg-black hover:text-white text-black border-2 border-black px-4 py-2 text-xs font-black uppercase tracking-widest transition-colors"
               >
-                <Plus size={16} /> New Pack
+                <RefreshCw size={14} className={isLoadingUsers ? 'animate-spin' : ''} /> REFRESH USERS
               </button>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {currentPacks.map(pack => (
-                <div key={pack.id} className={`${pack.color} border-4 border-black p-6 flex flex-col items-center text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]`}>
-                  {pack.coverPhotoUrl ? (
-                    <img src={pack.coverPhotoUrl} alt={pack.name} className="w-32 aspect-[750/1050] object-cover mb-4 border-2 border-black bg-white" />
-                  ) : (
-                    <div className="w-32 aspect-[750/1050] bg-neutral-200 border-2 border-black mb-4 flex items-center justify-center">
-                      <ImageIcon size={32} className="text-neutral-400" />
+
+            {/* Quick Card Search Tool: "Who owns this card?" */}
+            <div className="bg-neutral-50 border-2 border-black p-5 space-y-4">
+              <h4 className="text-xs font-black uppercase tracking-widest text-neutral-600 flex items-center gap-2">
+                <Search size={16} /> CHECK CARD CIRCULATION & OWNERS
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <select
+                  value={selectedCardForHolders?.id || ''}
+                  onChange={(e) => {
+                    const found = cards.find(c => c.id === e.target.value);
+                    setSelectedCardForHolders(found || null);
+                  }}
+                  className="w-full bg-white border-2 border-black p-2.5 text-xs font-black uppercase"
+                >
+                  <option value="">-- SELECT A CARD TO SEE ALL CURRENT OWNERS --</option>
+                  {cards.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.player} ({c.team} • {c.rarity} • {formatCurrency(c.currentPrice)})
+                    </option>
+                  ))}
+                </select>
+
+                {selectedCardForHolders && (
+                  <div className="bg-[#D4FF00]/20 border-2 border-black p-3 text-xs flex items-center justify-between">
+                    <div>
+                      <span className="font-black uppercase block">{selectedCardForHolders.player}</span>
+                      <span className="text-[10px] text-neutral-600 font-bold uppercase">
+                        REMAINING SHOP STOCK: {getDefaultStock(selectedCardForHolders)} / {getDefaultMaxSupply(selectedCardForHolders)}
+                      </span>
                     </div>
+                    <span className="bg-black text-[#D4FF00] px-2.5 py-1 text-xs font-black">
+                      {usersList.filter(u => u.collectionIds?.includes(selectedCardForHolders.id)).length} USERS HOLD THIS CARD
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Display Holders of Selected Card */}
+              {selectedCardForHolders && (
+                <div className="border-t-2 border-black pt-4">
+                  <h5 className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">
+                    REGISTERED USERS WITH THIS CARD IN VAULT:
+                  </h5>
+                  {(() => {
+                    const holders = usersList.filter(u => u.collectionIds?.includes(selectedCardForHolders.id));
+                    if (holders.length === 0) {
+                      return <p className="text-xs font-bold text-neutral-500">No users currently own this card in their digital vault.</p>;
+                    }
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                        {holders.map(u => (
+                          <div key={u.id} className="bg-white border-2 border-black p-2.5 flex items-center justify-between">
+                            <div>
+                              <p className="font-black text-xs uppercase truncate">{u.email}</p>
+                              <p className="text-[9px] text-neutral-500 font-mono">UID: {u.id.slice(0, 8)}...</p>
+                            </div>
+                            <span className="text-[9px] bg-[#D4FF00] font-black px-2 py-0.5 border border-black">
+                              OWNED
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+
+            {/* All Users Master Table */}
+            <div className="overflow-x-auto border-2 border-black">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-black bg-neutral-100 text-[10px] font-black uppercase tracking-widest">
+                    <th className="p-3">USER / COLLECTOR</th>
+                    <th className="p-3">WALLET BALANCE</th>
+                    <th className="p-3">TOTAL CARDS IN VAULT</th>
+                    <th className="p-3 text-right">INSPECT COLLECTION</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y-2 divide-black text-xs font-bold">
+                  {usersList.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="p-8 text-center text-neutral-500">
+                        {isLoadingUsers ? 'Loading registered collectors...' : 'No users found in database yet.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    usersList.map((u) => {
+                      const userCardCount = u.collectionIds?.length || 0;
+                      return (
+                        <tr key={u.id} className="hover:bg-neutral-50 transition-colors">
+                          <td className="p-3">
+                            <div className="font-black text-sm uppercase">{u.email}</div>
+                            <div className="text-[10px] text-neutral-400 font-mono">ID: {u.id}</div>
+                          </td>
+                          <td className="p-3 font-black text-black">
+                            <span className="bg-[#D4FF00]/40 px-2 py-1 border border-black">
+                              {formatCurrency(u.walletBalance || 0)}
+                            </span>
+                          </td>
+                          <td className="p-3 font-black text-sm">
+                            {userCardCount} {userCardCount === 1 ? 'Card' : 'Cards'}
+                          </td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => setSelectedUser(u)}
+                              className="px-3 py-1.5 bg-black text-[#D4FF00] hover:bg-[#D4FF00] hover:text-black border-2 border-black text-xs font-black uppercase tracking-wider transition-colors"
+                            >
+                              VIEW ({userCardCount})
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
-                  <h4 className="text-xl font-black uppercase tracking-tighter mb-1">{pack.name}</h4>
-                  <p className="text-sm font-black uppercase tracking-widest opacity-80 mb-4">{pack.size} Cards • {formatCurrency(pack.price)}</p>
-                  
-                  <div className="flex gap-2 w-full mt-auto">
-                    <button 
-                      onClick={() => handleEditPack(pack)}
-                      className="flex-1 flex justify-center p-2 border-2 border-black bg-white text-black hover:bg-[#D4FF00] transition-colors"
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal: View Specific User's Collection */}
+            {selectedUser && (
+              <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 overflow-y-auto backdrop-blur-sm">
+                <div className="bg-white w-full max-w-4xl border-4 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] my-8">
+                  <div className="bg-black text-white p-5 flex items-center justify-between border-b-4 border-black">
+                    <div>
+                      <h3 className="text-xl font-black uppercase text-[#D4FF00]">
+                        COLLECTOR VAULT: {selectedUser.email}
+                      </h3>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                        WALLET BALANCE: {formatCurrency(selectedUser.walletBalance || 0)} • {selectedUser.collectionIds?.length || 0} CARDS OWNED
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedUser(null)}
+                      className="bg-white text-black hover:bg-[#D4FF00] p-1.5 border-2 border-black font-black"
                     >
-                      <Edit2 size={16} />
+                      <X size={20} />
                     </button>
-                    <button 
-                      onClick={() => handleDeletePack(pack)}
-                      className="flex-1 flex justify-center p-2 border-2 border-black bg-white text-red-500 hover:bg-red-500 hover:text-white transition-colors"
+                  </div>
+
+                  <div className="p-6 max-h-[65vh] overflow-y-auto space-y-4">
+                    {(!selectedUser.collectionIds || selectedUser.collectionIds.length === 0) ? (
+                      <div className="py-12 text-center text-neutral-500 font-black uppercase">
+                        This user does not have any cards in their vault yet.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                        {selectedUser.collectionIds.map(cId => {
+                          const cardData = cards.find(c => c.id === cId);
+                          if (!cardData) {
+                            return (
+                              <div key={cId} className="border-2 border-black p-3 bg-neutral-100 text-xs">
+                                <span className="font-mono text-neutral-500">ID: {cId}</span>
+                                <p className="font-black text-neutral-400 mt-1">Card Removed or Custom</p>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div key={cId} className="border-2 border-black p-2 bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex flex-col">
+                              <div className="aspect-[750/1050] bg-neutral-100 border border-black mb-2 overflow-hidden">
+                                {cardData.imageUrl ? (
+                                  <img src={cardData.imageUrl} alt={cardData.player} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                                    <Sparkles size={24} className="text-neutral-500" />
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-[9px] font-black uppercase text-neutral-500">{cardData.team}</span>
+                              <h5 className="text-xs font-black uppercase truncate">{cardData.player}</h5>
+                              <div className="mt-auto pt-2 flex items-center justify-between border-t border-neutral-200 text-[10px] font-black">
+                                <span className="text-neutral-600">{cardData.rarity}</span>
+                                <span className="text-black">{formatCurrency(cardData.currentPrice)}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4 bg-neutral-100 border-t-2 border-black text-right">
+                    <button
+                      onClick={() => setSelectedUser(null)}
+                      className="bg-black text-white hover:bg-neutral-800 px-6 py-2 text-xs font-black uppercase tracking-widest border-2 border-black"
                     >
-                      <Trash2 size={16} />
+                      CLOSE AUDIT
                     </button>
                   </div>
                 </div>
-              ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: PACK CONFIGURATION */}
+        {activeTab === 'packs' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-widest">MANAGE PACK CONFIGURATIONS</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                  Configure digital pack prices, drop rate odds, and cards per pack.
+                </p>
+              </div>
+              <button
+                onClick={handleCreatePack}
+                className="flex items-center gap-2 bg-[#D4FF00] hover:bg-black hover:text-white text-black border-2 border-black px-4 py-2 text-xs font-black uppercase tracking-widest transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+              >
+                <Plus size={16} /> ADD NEW PACK
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {currentPacks.map((pack) => {
+                const odds = pack.rarityOdds || { base: 60, silver: 30, gold: 9, shield: 1 };
+                return (
+                  <div key={pack.id} className="border-4 border-black p-6 bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-black uppercase bg-black text-white px-2 py-0.5">
+                          {pack.size} CARDS
+                        </span>
+                        <span className="text-xl font-black">{formatCurrency(pack.price)}</span>
+                      </div>
+                      <h4 className="text-2xl font-black uppercase">{pack.name}</h4>
+                      <p className="text-xs font-bold text-neutral-600 mt-1">{pack.description || 'Standard digital collectible pack.'}</p>
+                      
+                      <div className="mt-4 bg-neutral-100 p-3 border border-black text-[10px] font-black space-y-1">
+                        <div className="text-neutral-500">DROP RATE ODDS:</div>
+                        <div className="grid grid-cols-2 gap-1 font-mono">
+                          <div>BASE: {odds.base}%</div>
+                          <div>SILVER: {odds.silver}%</div>
+                          <div>GOLD: {odds.gold}%</div>
+                          <div className="text-[#849a00]">1-OF-1: {odds.shield}%</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-6 border-t-2 border-black mt-6">
+                      <button
+                        onClick={() => handleEditPack(pack)}
+                        className="flex-1 py-2 bg-neutral-100 hover:bg-black hover:text-white border-2 border-black font-black uppercase text-xs transition-colors"
+                      >
+                        EDIT PACK
+                      </button>
+                      <button
+                        onClick={() => handleDeletePack(pack)}
+                        className="p-2 bg-red-100 hover:bg-red-600 hover:text-white border-2 border-red-600 text-red-600 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
-        {activeTab === 'themes' && (
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-              <h3 className="text-xl font-black uppercase tracking-widest">Custom Card Themes</h3>
-              <button 
-                onClick={handleCreateTheme}
-                className="flex items-center gap-2 bg-black text-white px-4 py-2 font-black uppercase tracking-widest hover:bg-[#D4FF00] hover:text-black transition-colors"
+
+        {/* TAB 4: TRANSACTIONS & WALLET ACTIVITY */}
+        {activeTab === 'transactions' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-widest">WALLET & SHOP TRANSACTIONS</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                  Real-time ledger of wallet top-ups, pack purchases, and database card orders.
+                </p>
+              </div>
+              <button
+                onClick={fetchTransactions}
+                className="flex items-center gap-2 bg-neutral-100 hover:bg-black hover:text-white text-black border-2 border-black px-4 py-2 text-xs font-black uppercase tracking-widest transition-colors"
               >
-                <Plus size={16} /> New Theme
+                <RefreshCw size={14} className={isLoadingTx ? 'animate-spin' : ''} /> REFRESH LEDGER
               </button>
             </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {themes.map(theme => (
-                <div key={theme.id} className="border-2 border-black p-4 flex flex-col items-center text-center bg-white">
-                  {theme.overlayImageUrl ? (
-                    <img src={theme.overlayImageUrl} alt={theme.name} className="w-32 aspect-[750/1050] object-contain border-2 border-black mb-4 bg-neutral-100" />
+
+            <div className="overflow-x-auto border-2 border-black">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-black bg-neutral-100 text-[10px] font-black uppercase tracking-widest">
+                    <th className="p-3">DATE / TIME</th>
+                    <th className="p-3">USER</th>
+                    <th className="p-3">TYPE</th>
+                    <th className="p-3">DETAILS</th>
+                    <th className="p-3 text-right">AMOUNT (৳)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y-2 divide-black text-xs font-bold">
+                  {transactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-neutral-500">
+                        {isLoadingTx ? 'Loading transaction logs...' : 'No transactions recorded yet.'}
+                      </td>
+                    </tr>
                   ) : (
-                    <div className="w-32 aspect-[750/1050] bg-neutral-200 border-2 border-black mb-4 flex items-center justify-center">
-                      <ImageIcon size={32} className="text-neutral-400" />
-                    </div>
+                    transactions.map((tx) => (
+                      <tr key={tx.id} className="hover:bg-neutral-50">
+                        <td className="p-3 text-[10px] font-mono text-neutral-500">
+                          {new Date(tx.timestamp).toLocaleString()}
+                        </td>
+                        <td className="p-3 font-black uppercase">
+                          {tx.userEmail}
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 text-[9px] font-black uppercase border border-black ${
+                            tx.type === 'top_up' ? 'bg-emerald-200 text-emerald-950' : 'bg-[#D4FF00] text-black'
+                          }`}>
+                            {tx.type === 'top_up' ? 'TOP UP' : 'PURCHASE'}
+                          </span>
+                        </td>
+                        <td className="p-3 text-neutral-700">
+                          {tx.description}
+                        </td>
+                        <td className={`p-3 text-right font-black text-sm ${tx.type === 'top_up' ? 'text-emerald-700' : 'text-black'}`}>
+                          {tx.type === 'top_up' ? '+' : '-'}{formatCurrency(tx.amount)}
+                        </td>
+                      </tr>
+                    ))
                   )}
-                  <h4 className="text-xl font-black uppercase tracking-tighter mb-4">{theme.name}</h4>
-                  
-                  <div className="flex gap-2 w-full mt-auto">
-                    <button 
-                      onClick={() => handleEditTheme(theme)}
-                      className="flex-1 flex justify-center p-2 border-2 border-black bg-white text-black hover:bg-[#D4FF00] transition-colors"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteTheme(theme)}
-                      className="flex-1 flex justify-center p-2 border-2 border-black bg-white text-red-500 hover:bg-red-500 hover:text-white transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {themes.length === 0 && (
-                <div className="col-span-full py-12 text-center text-neutral-500 font-bold uppercase tracking-widest">
-                  No themes found. Create one to get started.
-                </div>
-              )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -597,242 +917,236 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
 
       {/* Edit Card Modal */}
       {editingCard && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-2xl border-4 border-black relative max-h-[90vh] overflow-y-auto">
-            <button 
-              onClick={() => setEditingCard(null)}
-              className="absolute top-4 right-4 bg-black text-white w-8 h-8 flex items-center justify-center hover:bg-[#D4FF00] hover:text-black transition-colors"
-            >
-              <X size={20} />
-            </button>
-            <div className="p-8 space-y-6">
-              <h2 className="text-2xl font-black uppercase tracking-tighter">Edit Card: {editingCard.player}</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Player Name</label>
-                  <input type="text" name="player" value={editForm.player || ''} onChange={handleChangeCard} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                </div>
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Team</label>
-                  <input type="text" name="team" value={editForm.team || ''} onChange={handleChangeCard} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                </div>
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Position</label>
-                  <input type="text" name="position" value={editForm.position || ''} onChange={handleChangeCard} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                </div>
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Year</label>
-                  <input type="number" name="year" value={editForm.year || ''} onChange={handleChangeCard} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                </div>
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Current Price</label>
-                  <input type="number" name="currentPrice" value={editForm.currentPrice || ''} onChange={handleChangeCard} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                </div>
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Set</label>
-                  <input type="text" name="set" value={editForm.set || ''} onChange={handleChangeCard} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                </div>
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Edition</label>
-                  <input type="text" name="edition" value={editForm.edition || ''} onChange={handleChangeCard} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                </div>
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Rarity</label>
-                  <input type="text" name="rarity" value={editForm.rarity || ''} onChange={handleChangeCard} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                </div>
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Card Number</label>
-                  <input type="text" name="cardNumber" value={editForm.cardNumber || ''} onChange={handleChangeCard} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                </div>
-              </div>
-              
-              <button 
-                onClick={handleSaveCard}
-                disabled={isSaving}
-                className="w-full flex items-center justify-center gap-2 bg-[#D4FF00] hover:bg-black hover:text-white text-black border-2 border-black py-4 font-black uppercase tracking-widest transition-colors"
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 overflow-y-auto backdrop-blur-sm">
+          <div className="bg-white w-full max-w-xl border-4 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] my-8">
+            <div className="bg-black text-white p-5 flex items-center justify-between border-b-4 border-black">
+              <h3 className="text-xl font-black uppercase text-[#D4FF00]">
+                EDIT CARD & SUPPLY
+              </h3>
+              <button
+                onClick={() => setEditingCard(null)}
+                className="bg-white text-black hover:bg-[#D4FF00] p-1.5 border-2 border-black font-black"
               >
-                {isSaving ? 'Saving...' : <><Check size={20} /> Save Changes</>}
+                <X size={20} />
               </button>
             </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleSaveCard(); }} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-neutral-500 mb-1">PLAYER NAME</label>
+                  <input
+                    type="text"
+                    name="player"
+                    value={editForm.player || ''}
+                    onChange={handleChangeCard}
+                    className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs uppercase"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-neutral-500 mb-1">TEAM</label>
+                  <input
+                    type="text"
+                    name="team"
+                    value={editForm.team || ''}
+                    onChange={handleChangeCard}
+                    className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs uppercase"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-neutral-500 mb-1">MARKET PRICE (৳)</label>
+                  <input
+                    type="number"
+                    name="currentPrice"
+                    value={editForm.currentPrice || 0}
+                    onChange={handleChangeCard}
+                    className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-neutral-500 mb-1">RARITY</label>
+                  <select
+                    name="rarity"
+                    value={editForm.rarity || 'Base'}
+                    onChange={handleChangeCard}
+                    className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs uppercase"
+                  >
+                    <option value="Base">Base</option>
+                    <option value="Silver Refractor">Silver Refractor</option>
+                    <option value="Gold Autograph">Gold Autograph</option>
+                    <option value="1-of-1 Shield">1-of-1 Shield</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-neutral-500 mb-1">AVAILABLE STOCK</label>
+                  <input
+                    type="number"
+                    min="0"
+                    name="stock"
+                    value={editForm.stock ?? 50}
+                    onChange={handleChangeCard}
+                    className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-neutral-500 mb-1">MAX PRINT SUPPLY</label>
+                  <input
+                    type="number"
+                    min="1"
+                    name="maxSupply"
+                    value={editForm.maxSupply ?? 50}
+                    onChange={handleChangeCard}
+                    className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingCard(null)}
+                  className="flex-1 py-3 bg-white border-2 border-black font-black uppercase text-xs"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex-1 py-3 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] border-2 border-black font-black uppercase text-xs transition-colors"
+                >
+                  {isSaving ? 'SAVING...' : 'SAVE CARD CHANGES'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
       {/* Edit Pack Modal */}
       {editingPack && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-xl border-4 border-black relative max-h-[90vh] overflow-y-auto">
-            <button 
-              onClick={() => setEditingPack(null)}
-              className="absolute top-4 right-4 bg-black text-white w-8 h-8 flex items-center justify-center hover:bg-[#D4FF00] hover:text-black transition-colors"
-            >
-              <X size={20} />
-            </button>
-            <div className="p-8 space-y-6">
-              <h2 className="text-2xl font-black uppercase tracking-tighter">Edit Pack</h2>
-              
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 overflow-y-auto backdrop-blur-sm">
+          <div className="bg-white w-full max-w-xl border-4 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] my-8">
+            <div className="bg-black text-white p-5 flex items-center justify-between border-b-4 border-black">
+              <h3 className="text-xl font-black uppercase text-[#D4FF00]">
+                CONFIGURE PACK
+              </h3>
+              <button
+                onClick={() => setEditingPack(null)}
+                className="bg-white text-black hover:bg-[#D4FF00] p-1.5 border-2 border-black font-black"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleSavePack(); }} className="p-6 space-y-4">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Cover Photo</label>
-                  <div className="flex items-center gap-4">
-                    {packEditForm.coverPhotoUrl ? (
-                      <img src={packEditForm.coverPhotoUrl} alt="Preview" className="w-16 aspect-[750/1050] object-cover border-2 border-black" />
-                    ) : (
-                      <div className="w-16 aspect-[750/1050] border-2 border-black bg-neutral-100 flex items-center justify-center">
-                        <ImageIcon className="text-neutral-400" />
-                      </div>
-                    )}
-                    <label className="cursor-pointer bg-black text-white px-4 py-2 text-xs font-black uppercase tracking-widest hover:bg-[#D4FF00] hover:text-black transition-colors border-2 border-black">
-                      Upload Image
-                      <input type="file" accept="image/*" onChange={handlePackImageChange} className="hidden" />
-                    </label>
-                  </div>
+                  <label className="block text-[10px] font-black uppercase text-neutral-500 mb-1">PACK NAME</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={packEditForm.name || ''}
+                    onChange={handleChangePack}
+                    className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs uppercase"
+                    required
+                  />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Pack Name</label>
-                  <input type="text" name="name" value={packEditForm.name || ''} onChange={handleChangePack} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                </div>
-                
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Price (৳)</label>
-                    <input type="number" step="1" name="price" value={packEditForm.price || ''} onChange={handleChangePack} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
+                    <label className="block text-[10px] font-black uppercase text-neutral-500 mb-1">PRICE (৳)</label>
+                    <input
+                      type="number"
+                      name="price"
+                      value={packEditForm.price || 0}
+                      onChange={handleChangePack}
+                      className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs"
+                      required
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Number of Cards</label>
-                    <input type="number" name="size" value={packEditForm.size || ''} onChange={handleChangePack} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
+                    <label className="block text-[10px] font-black uppercase text-neutral-500 mb-1">CARDS PER PACK</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      name="size"
+                      value={packEditForm.size || 5}
+                      onChange={handleChangePack}
+                      className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs"
+                      required
+                    />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Background Color Classes (Tailwind)</label>
-                  <input type="text" name="color" value={packEditForm.color || ''} onChange={handleChangePack} placeholder="e.g. bg-white, bg-[#D4FF00], bg-black text-white" className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                </div>
-              </div>
-              
-              <button 
-                onClick={handleSavePack}
-                disabled={isSaving}
-                className="w-full flex items-center justify-center gap-2 bg-[#D4FF00] hover:bg-black hover:text-white text-black border-2 border-black py-4 font-black uppercase tracking-widest transition-colors"
-              >
-                {isSaving ? 'Saving...' : <><Check size={20} /> Save Pack</>}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Edit Theme Modal */}
-      {editingTheme && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-xl border-4 border-black relative max-h-[90vh] overflow-y-auto">
-            <button 
-              onClick={() => setEditingTheme(null)}
-              className="absolute top-4 right-4 bg-black text-white w-8 h-8 flex items-center justify-center hover:bg-[#D4FF00] hover:text-black transition-colors"
-            >
-              <X size={20} />
-            </button>
-            <div className="p-8 space-y-6">
-              <h2 className="text-2xl font-black uppercase tracking-tighter">Edit Theme</h2>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Theme Name</label>
-                  <input type="text" name="name" value={themeEditForm.name || ''} onChange={handleChangeTheme} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Overlay Image (Transparent PNG)</label>
-                  <div className="flex flex-col gap-2">
-                    {themeEditForm.overlayImageUrl && (
-                      <img src={themeEditForm.overlayImageUrl} alt="Overlay" className="h-24 object-contain border-2 border-black bg-neutral-100" />
-                    )}
-                    <input type="file" accept="image/png" onChange={(e) => handleThemeImageChange(e, 'overlayImageUrl')} className="w-full" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Club Logo</label>
-                  <div className="flex flex-col gap-2 mb-4">
-                    {themeEditForm.clubLogoUrl && (
-                      <img src={themeEditForm.clubLogoUrl} alt="Club Logo" className="h-16 object-contain border-2 border-black bg-neutral-100" />
-                    )}
-                    <input type="file" accept="image/*" onChange={(e) => handleThemeImageChange(e, 'clubLogoUrl')} className="w-full" />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
+                {/* Drop Odds Configuration */}
+                <div className="border-2 border-black p-4 bg-neutral-50 space-y-3">
+                  <span className="block text-[10px] font-black uppercase text-neutral-600">
+                    DROP RATE ODDS DISTRIBUTION (%)
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <div>
-                      <label className="block text-xs font-black text-neutral-500 mb-1">Size (px)</label>
-                      <input type="number" name="clubLogoSize" value={themeEditForm.clubLogoSize ?? 80} onChange={(e) => setThemeEditForm((prev: any) => ({ ...prev, clubLogoSize: Number(e.target.value) }))} className="w-full bg-neutral-100 border-2 border-black p-2 text-sm font-bold focus:outline-none" />
+                      <label className="block text-[9px] font-black uppercase text-neutral-500">BASE %</label>
+                      <input
+                        type="number"
+                        value={packEditForm.rarityOdds?.base ?? 60}
+                        onChange={(e) => handlePackOddsChange('base', Number(e.target.value))}
+                        className="w-full bg-white border border-black p-1.5 text-xs font-mono font-bold"
+                      />
                     </div>
                     <div>
-                      <label className="block text-xs font-black text-neutral-500 mb-1">Top (%)</label>
-                      <input type="number" name="clubLogoTop" value={themeEditForm.clubLogoTop ?? 6} onChange={(e) => setThemeEditForm((prev: any) => ({ ...prev, clubLogoTop: Number(e.target.value) }))} className="w-full bg-neutral-100 border-2 border-black p-2 text-sm font-bold focus:outline-none" />
+                      <label className="block text-[9px] font-black uppercase text-neutral-500">SILVER %</label>
+                      <input
+                        type="number"
+                        value={packEditForm.rarityOdds?.silver ?? 30}
+                        onChange={(e) => handlePackOddsChange('silver', Number(e.target.value))}
+                        className="w-full bg-white border border-black p-1.5 text-xs font-mono font-bold"
+                      />
                     </div>
                     <div>
-                      <label className="block text-xs font-black text-neutral-500 mb-1">Left (%)</label>
-                      <input type="number" name="clubLogoLeft" value={themeEditForm.clubLogoLeft ?? 6} onChange={(e) => setThemeEditForm((prev: any) => ({ ...prev, clubLogoLeft: Number(e.target.value) }))} className="w-full bg-neutral-100 border-2 border-black p-2 text-sm font-bold focus:outline-none" />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Edition Logo</label>
-                  <div className="flex flex-col gap-2 mb-4">
-                    {themeEditForm.editionLogoUrl && (
-                      <img src={themeEditForm.editionLogoUrl} alt="Edition Logo" className="h-16 object-contain border-2 border-black bg-neutral-100" />
-                    )}
-                    <input type="file" accept="image/*" onChange={(e) => handleThemeImageChange(e, 'editionLogoUrl')} className="w-full" />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-xs font-black text-neutral-500 mb-1">Size (px)</label>
-                      <input type="number" name="editionLogoSize" value={themeEditForm.editionLogoSize ?? 80} onChange={(e) => setThemeEditForm((prev: any) => ({ ...prev, editionLogoSize: Number(e.target.value) }))} className="w-full bg-neutral-100 border-2 border-black p-2 text-sm font-bold focus:outline-none" />
+                      <label className="block text-[9px] font-black uppercase text-neutral-500">GOLD %</label>
+                      <input
+                        type="number"
+                        value={packEditForm.rarityOdds?.gold ?? 9}
+                        onChange={(e) => handlePackOddsChange('gold', Number(e.target.value))}
+                        className="w-full bg-white border border-black p-1.5 text-xs font-mono font-bold"
+                      />
                     </div>
                     <div>
-                      <label className="block text-xs font-black text-neutral-500 mb-1">Top (%)</label>
-                      <input type="number" name="editionLogoTop" value={themeEditForm.editionLogoTop ?? 6} onChange={(e) => setThemeEditForm((prev: any) => ({ ...prev, editionLogoTop: Number(e.target.value) }))} className="w-full bg-neutral-100 border-2 border-black p-2 text-sm font-bold focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-black text-neutral-500 mb-1">Left (%)</label>
-                      <input type="number" name="editionLogoLeft" value={themeEditForm.editionLogoLeft ?? 80} onChange={(e) => setThemeEditForm((prev: any) => ({ ...prev, editionLogoLeft: Number(e.target.value) }))} className="w-full bg-neutral-100 border-2 border-black p-2 text-sm font-bold focus:outline-none" />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Font File (.ttf, .woff, .woff2)</label>
-                  <input type="file" accept=".ttf,.woff,.woff2,font/*" onChange={(e) => handleThemeImageChange(e, 'fontBase64')} className="w-full mb-2" />
-                  <input type="text" name="fontName" value={themeEditForm.fontName || ''} onChange={handleChangeTheme} placeholder="Font Name (e.g. MyCustomFont)" className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white mb-2" />
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Font Color</label>
-                  <div className="flex gap-2 items-center mb-2">
-                    <input type="color" name="fontColor" value={themeEditForm.fontColor || '#ffffff'} onChange={handleChangeTheme} className="w-12 h-12 p-1 bg-neutral-100 border-2 border-black cursor-pointer" />
-                    <input type="text" name="fontColor" value={themeEditForm.fontColor || '#ffffff'} onChange={handleChangeTheme} placeholder="e.g. #ffffff" className="flex-1 bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                  </div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Font Size</label>
-                  <input type="number" name="fontSize" value={themeEditForm.fontSize || 48} onChange={(e) => setThemeEditForm((prev: any) => ({ ...prev, fontSize: Number(e.target.value) }))} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white mb-2" />
-                  <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Font Position (Bottom %)</label>
-                  <input type="number" name="fontPositionBottom" value={themeEditForm.fontPositionBottom ?? 5} onChange={(e) => setThemeEditForm((prev: any) => ({ ...prev, fontPositionBottom: Number(e.target.value) }))} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white mb-2" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Stretch X (1.0 = normal)</label>
-                      <input type="number" step="0.1" name="fontScaleX" value={themeEditForm.fontScaleX ?? 1} onChange={(e) => setThemeEditForm((prev: any) => ({ ...prev, fontScaleX: Number(e.target.value) }))} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">Stretch Y (1.0 = normal)</label>
-                      <input type="number" step="0.1" name="fontScaleY" value={themeEditForm.fontScaleY ?? 1} onChange={(e) => setThemeEditForm((prev: any) => ({ ...prev, fontScaleY: Number(e.target.value) }))} className="w-full bg-neutral-100 border-2 border-black p-3 text-sm font-bold focus:outline-none focus:bg-white" />
+                      <label className="block text-[9px] font-black uppercase text-neutral-500">1-OF-1 %</label>
+                      <input
+                        type="number"
+                        value={packEditForm.rarityOdds?.shield ?? 1}
+                        onChange={(e) => handlePackOddsChange('shield', Number(e.target.value))}
+                        className="w-full bg-white border border-black p-1.5 text-xs font-mono font-bold"
+                      />
                     </div>
                   </div>
                 </div>
               </div>
-              
-              <button 
-                onClick={handleSaveTheme}
-                disabled={isSaving}
-                className="w-full flex items-center justify-center gap-2 bg-[#D4FF00] hover:bg-black hover:text-white text-black border-2 border-black py-4 font-black uppercase tracking-widest transition-colors"
-              >
-                {isSaving ? 'Saving...' : <><Check size={20} /> Save Theme</>}
-              </button>
-            </div>
+
+              <div className="pt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingPack(null)}
+                  className="flex-1 py-3 bg-white border-2 border-black font-black uppercase text-xs"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex-1 py-3 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] border-2 border-black font-black uppercase text-xs transition-colors"
+                >
+                  {isSaving ? 'SAVING...' : 'SAVE PACK'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

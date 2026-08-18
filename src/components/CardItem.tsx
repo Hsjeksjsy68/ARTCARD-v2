@@ -1,8 +1,8 @@
 import React from 'react';
 import { FootballCard } from '../types';
-import { cn, formatCurrency } from '../lib/utils';
+import { cn, formatCurrency, getDefaultStock, getDefaultMaxSupply } from '../lib/utils';
 import { motion } from 'motion/react';
-import { Shield, Sparkles, Star, Library } from 'lucide-react';
+import { Shield, Sparkles, Star, Library, AlertCircle } from 'lucide-react';
 
 interface CardItemProps {
   card: FootballCard;
@@ -13,6 +13,9 @@ interface CardItemProps {
 
 export function CardItem({ card, inCollection, onClick }: CardItemProps) {
   const isHolo = card.rarity !== 'Base';
+  const stock = getDefaultStock(card);
+  const maxSupply = getDefaultMaxSupply(card);
+  const isSoldOut = stock <= 0;
   
   return (
     <motion.div
@@ -22,10 +25,13 @@ export function CardItem({ card, inCollection, onClick }: CardItemProps) {
       className="group cursor-pointer relative"
     >
       {/* Card Body */}
-      <div className="relative aspect-[750/1050] bg-white rounded-none border-2 border-black overflow-hidden flex flex-col transition-colors group-hover:border-[#D4FF00]">
+      <div className={cn(
+        "relative aspect-[750/1050] bg-white rounded-none border-2 border-black overflow-hidden flex flex-col transition-colors group-hover:border-[#D4FF00]",
+        isSoldOut && "opacity-85 grayscale-[30%]"
+      )}>
         
         {/* Holographic Overlay Effect */}
-        {isHolo && (
+        {isHolo && !isSoldOut && (
           <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-[linear-gradient(105deg,transparent_20%,rgba(212,255,0,0.1)_25%,transparent_30%)] transition-opacity duration-700 ease-out z-20 pointer-events-none" />
         )}
 
@@ -36,13 +42,33 @@ export function CardItem({ card, inCollection, onClick }: CardItemProps) {
           </div>
         )}
 
-        {/* Most Searched / Search Count Badge */}
-        {card.searchCount !== undefined && card.searchCount > 0 && (
-          <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 z-30 bg-black text-[#D4FF00] border-2 border-black px-1.5 py-0.5 text-[8px] sm:text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(212,255,0,1)]">
-            <span>🔥</span>
-            <span>{card.searchCount} {card.searchCount === 1 ? 'SEARCH' : 'SEARCHES'}</span>
-          </div>
-        )}
+        {/* Stock / Limited Edition Badge */}
+        <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 z-30 flex flex-col gap-1">
+          {isSoldOut ? (
+            <div className="bg-red-600 text-white border border-black px-1.5 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+              SOLD OUT
+            </div>
+          ) : card.rarity === '1-of-1 Shield' ? (
+            <div className="bg-black text-[#D4FF00] border border-[#D4FF00] px-1.5 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#D4FF00]">
+              1 OF 1 ONLY
+            </div>
+          ) : (
+            <div className={cn(
+              "border border-black px-1.5 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]",
+              stock <= 3 ? "bg-amber-400 text-black animate-pulse" : "bg-white/95 text-black"
+            )}>
+              {stock} / {maxSupply} LEFT
+            </div>
+          )}
+
+          {/* Most Searched Badge */}
+          {card.searchCount !== undefined && card.searchCount > 0 && !isSoldOut && (
+            <div className="bg-black text-[#D4FF00] border border-black px-1.5 py-0.5 text-[7px] sm:text-[8px] font-black uppercase tracking-wider flex items-center gap-0.5">
+              <span>🔥</span>
+              <span>{card.searchCount}</span>
+            </div>
+          )}
+        </div>
 
         {card.imageUrl ? (
           <img src={card.imageUrl} alt={card.player} className="absolute inset-0 w-full h-full object-cover z-10" />
@@ -78,8 +104,14 @@ export function CardItem({ card, inCollection, onClick }: CardItemProps) {
       {/* Price tag below card */}
       <div className="mt-2 sm:mt-4 flex justify-between items-center px-1">
         <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-neutral-500">{card.cardNumber}</span>
-        <span className="text-xs sm:text-sm font-black text-black group-hover:text-neutral-700 transition-colors">{formatCurrency(card.currentPrice)}</span>
+        <span className={cn(
+          "text-xs sm:text-sm font-black transition-colors",
+          isSoldOut ? "text-neutral-400 line-through" : "text-black group-hover:text-neutral-700"
+        )}>
+          {formatCurrency(card.currentPrice)}
+        </span>
       </div>
     </motion.div>
   );
 }
+

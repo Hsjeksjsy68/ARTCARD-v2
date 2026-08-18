@@ -12,6 +12,13 @@ export interface Pack {
   price: number;
   color: string;
   coverPhotoUrl?: string;
+  description?: string;
+  rarityOdds?: {
+    base: number;
+    silver: number;
+    gold: number;
+    shield: number;
+  };
 }
 
 export interface CardTheme {
@@ -50,6 +57,8 @@ export interface FootballCard {
   priceHistory: PricePoint[];
   currentPrice: number;
   searchCount?: number;
+  stock?: number;
+  maxSupply?: number;
 }
 
 export interface UserProfileData {
@@ -63,4 +72,19 @@ export interface UserProfileData {
   customAvatar?: string;
   joinedAt?: number;
   collectionIds?: string[];
+  walletBalance?: number;
+}
+
+export interface WalletTransaction {
+  id: string;
+  userId: string;
+  userEmail?: string;
+  type: 'top_up' | 'buy_card' | 'buy_pack';
+  amount: number;
+  description: string;
+  cardId?: string;
+  cardName?: string;
+  packId?: string;
+  packName?: string;
+  timestamp: number;
 }
