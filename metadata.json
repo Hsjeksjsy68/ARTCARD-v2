@@ -1,0 +1,6 @@
+{
+  "name": "ARTCARD",
+  "description": "Premium football card database with historical market price tracking and collection management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

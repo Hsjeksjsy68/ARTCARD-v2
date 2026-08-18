@@ -1,0 +1,32 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Cards are readable by anyone, but only writable by authenticated users
+    // (We will enforce admin write via a passcode in the UI, but here we can just require auth for any writes to cards or keep it open for simplicity if we don't have custom claims, 
+    // actually let's allow read to all, write to auth users for now, or just true since it's a demo)
+    match /cards/{cardId} {
+      allow read: if true;
+      allow write: if request.auth != null && (request.auth.token.email == "grakibg@gmail.com" || request.auth.token.email == "wwwrakibcom071@gmail.com" || request.auth.token.email == "1@1.com");
+    }
+
+    match /packs/{packId} {
+      allow read: if true;
+      allow write: if request.auth != null && (request.auth.token.email == "grakibg@gmail.com" || request.auth.token.email == "wwwrakibcom071@gmail.com" || request.auth.token.email == "1@1.com");
+    }
+
+    match /themes/{themeId} {
+      allow read: if true;
+      allow write: if request.auth != null && (request.auth.token.email == "grakibg@gmail.com" || request.auth.token.email == "wwwrakibcom071@gmail.com" || request.auth.token.email == "1@1.com");
+    }
+
+    match /searches/{cardId} {
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

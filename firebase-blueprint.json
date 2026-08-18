@@ -1,0 +1,29 @@
+{
+  "cards": {
+    "$cardId": {
+      "player": "string",
+      "team": "string",
+      "position": "string",
+      "year": "number",
+      "set": "string",
+      "edition": "string",
+      "rarity": "string",
+      "cardNumber": "string",
+      "imageUrl": "string",
+      "imageGradient": "string",
+      "currentPrice": "number",
+      "priceHistory": [
+        {
+          "date": "string",
+          "price": "number"
+        }
+      ]
+    }
+  },
+  "users": {
+    "$userId": {
+      "email": "string",
+      "collectionIds": ["string"]
+    }
+  }
+}
