@@ -29,13 +29,23 @@ export function getDefaultMaxSupply(card: Partial<FootballCard>): number {
 export function drawRandomCards(
   availableCards: FootballCard[],
   count: number,
-  odds = { base: 60, silver: 28, gold: 10, shield: 2 }
+  odds = { base: 60, silver: 28, gold: 10, shield: 2 },
+  allowedEditions?: string[]
 ): FootballCard[] {
   if (!availableCards.length) return [];
   
+  // Filter by allowed editions if configured and not empty or 'ALL'
+  let eligibleCards = availableCards;
+  if (allowedEditions && allowedEditions.length > 0 && !allowedEditions.includes('ALL')) {
+    const filtered = availableCards.filter(c => c.edition && allowedEditions.includes(c.edition));
+    if (filtered.length > 0) {
+      eligibleCards = filtered;
+    }
+  }
+
   // Filter cards with stock > 0 if available, else all cards
-  const inStockCards = availableCards.filter(c => (c.stock === undefined ? true : c.stock > 0));
-  const pool = inStockCards.length > 0 ? inStockCards : availableCards;
+  const inStockCards = eligibleCards.filter(c => (c.stock === undefined ? true : c.stock > 0));
+  const pool = inStockCards.length > 0 ? inStockCards : eligibleCards;
 
   const baseCards = pool.filter(c => c.rarity === 'Base');
   const silverCards = pool.filter(c => c.rarity === 'Silver Refractor');

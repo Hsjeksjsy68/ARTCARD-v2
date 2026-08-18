@@ -91,12 +91,12 @@ export function PackShop({
     setIsPurchasing(true);
 
     try {
-      // 1. Draw cards based on pack odds
+      // 1. Draw cards based on pack odds and decided editions
       const odds = pack.rarityOdds || { base: 60, silver: 28, gold: 10, shield: 2 };
-      const drawn = drawRandomCards(cards, pack.size, odds);
+      const drawn = drawRandomCards(cards, pack.size, odds, pack.editions);
 
       if (drawn.length === 0) {
-        alert("No cards available in the pool right now.");
+        alert("No cards available in the pool right now for this pack's editions.");
         setIsPurchasing(false);
         return;
       }
@@ -222,39 +222,66 @@ export function PackShop({
             >
               {/* Header Badge */}
               <div className="flex items-center justify-between w-full mb-4">
-                <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 bg-black text-white border border-white/20">
-                  {pack.size} CARDS PER PACK
-                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 bg-black text-white border border-white/20">
+                    {pack.size} CARDS
+                  </span>
+                  {pack.badgeText && (
+                    <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 bg-[#D4FF00] text-black border border-black animate-pulse">
+                      {pack.badgeText}
+                    </span>
+                  )}
+                </div>
                 <span className="text-xl font-black tracking-tight">
                   {formatCurrency(pack.price)}
                 </span>
               </div>
 
-              {/* Cover Photo / Graphic */}
-              <div className="w-full flex justify-center mb-6">
+              {/* Cover Photo / Poster Graphic */}
+              <div className="w-full flex justify-center mb-5">
                 {pack.coverPhotoUrl ? (
-                  <img
-                    src={pack.coverPhotoUrl}
-                    alt={pack.name}
-                    className="w-44 aspect-[750/1050] object-cover border-2 border-black group-hover:scale-105 transition-transform bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)]"
-                  />
+                  <div className="relative group-hover:scale-105 transition-transform">
+                    <img
+                      src={pack.coverPhotoUrl}
+                      alt={pack.name}
+                      className="w-48 aspect-[750/1050] object-cover border-3 border-black bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+                    />
+                    {pack.editions && pack.editions.length > 0 && (
+                      <div className="absolute bottom-2 left-2 right-2 bg-black/90 text-[#D4FF00] text-[8px] font-black uppercase tracking-wider py-1 px-1.5 text-center border border-[#D4FF00]/40 backdrop-blur-sm truncate">
+                        {pack.editions.join(' • ')}
+                      </div>
+                    )}
+                  </div>
                 ) : (
-                  <div className="w-44 aspect-[750/1050] bg-neutral-100 border-2 border-black flex flex-col items-center justify-center group-hover:scale-105 transition-transform">
+                  <div className="w-48 aspect-[750/1050] bg-neutral-100 border-3 border-black flex flex-col items-center justify-center group-hover:scale-105 transition-transform relative shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
                     <PackageOpen
                       size={54}
                       className={pack.color?.includes('bg-black') ? 'text-[#D4FF00]' : 'text-black'}
                     />
+                    {pack.editions && pack.editions.length > 0 && (
+                      <div className="absolute bottom-2 left-2 right-2 bg-black text-[#D4FF00] text-[8px] font-black uppercase tracking-wider py-1 px-1.5 text-center border border-black truncate">
+                        {pack.editions.join(' • ')}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
               {/* Pack Details */}
-              <div className="space-y-4 text-center">
+              <div className="space-y-3 text-center">
                 <div>
                   <h3 className="text-2xl font-black uppercase tracking-tighter">{pack.name}</h3>
                   <p className="text-xs font-bold opacity-80 mt-1">
                     {pack.description || `Contains ${pack.size} guaranteed cards with randomized rarity distribution.`}
                   </p>
+                </div>
+
+                {/* Editions Badge Pill */}
+                <div className="bg-black/10 border border-black py-1.5 px-2 text-[9px] font-black uppercase flex items-center justify-between">
+                  <span className="opacity-70">EDITIONS POOL:</span>
+                  <span className="font-mono text-black font-black">
+                    {pack.editions && pack.editions.length > 0 ? pack.editions.join(', ') : 'ALL DATABASE EDITIONS'}
+                  </span>
                 </div>
 
                 {/* Drop Rates Pill Matrix */}

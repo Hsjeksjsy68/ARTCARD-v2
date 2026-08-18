@@ -13,6 +13,8 @@ export interface Pack {
   color: string;
   coverPhotoUrl?: string;
   description?: string;
+  editions?: string[];
+  badgeText?: string;
   rarityOdds?: {
     base: number;
     silver: number;

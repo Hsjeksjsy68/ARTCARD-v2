@@ -18,7 +18,13 @@ import {
   Minus, 
   RefreshCw,
   Sparkles,
-  ShieldAlert
+  ShieldAlert,
+  Upload,
+  Tag,
+  Palette,
+  PackageOpen,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { db, doc, deleteDoc, updateDoc, setDoc, collection, getDocs, onSnapshot, User } from '../lib/firebase';
 
@@ -67,6 +73,7 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
   // Packs State
   const [editingPack, setEditingPack] = useState<Pack | null>(null);
   const [packEditForm, setPackEditForm] = useState<Partial<Pack>>({});
+  const [customEditionInput, setCustomEditionInput] = useState('');
   
   // User Inventory Tracker State
   const [usersList, setUsersList] = useState<UserRecord[]>([]);
@@ -237,21 +244,104 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
   // Pack Handlers
   const handleEditPack = (pack: Pack) => {
     setEditingPack(pack);
-    setPackEditForm(pack);
+    setPackEditForm({
+      ...pack,
+      editions: pack.editions || []
+    });
   };
 
   const handleCreatePack = () => {
     const newPack: Pack = {
       id: `pack_${Date.now()}`,
-      name: 'NEW PACK',
+      name: 'NEW SPECIAL PACK',
       size: 5,
       price: 500,
-      color: 'bg-white',
+      color: 'bg-[#D4FF00] text-black',
+      editions: [],
+      badgeText: '',
+      description: 'Exclusive pack containing collectible cards with tailored drop odds.',
       rarityOdds: { base: 60, silver: 30, gold: 9, shield: 1 }
     };
     setEditingPack(newPack);
     setPackEditForm(newPack);
   };
+
+  const handleTogglePackEdition = (editionName: string) => {
+    setPackEditForm(prev => {
+      const current = prev.editions || [];
+      let next: string[];
+      if (current.includes(editionName)) {
+        next = current.filter(e => e !== editionName);
+      } else {
+        next = [...current, editionName];
+      }
+      return { ...prev, editions: next };
+    });
+  };
+
+  const handleAddCustomEdition = () => {
+    const trimmed = customEditionInput.trim();
+    if (!trimmed) return;
+    setPackEditForm(prev => {
+      const current = prev.editions || [];
+      if (!current.includes(trimmed)) {
+        return { ...prev, editions: [...current, trimmed] };
+      }
+      return prev;
+    });
+    setCustomEditionInput('');
+  };
+
+  const handlePosterFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      alert("Image size should be less than 8MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        setPackEditForm(prev => ({
+          ...prev,
+          coverPhotoUrl: result
+        }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const packThemes = [
+    { id: 'bg-[#D4FF00] text-black', name: 'Neon Lime' },
+    { id: 'bg-black text-white', name: 'Midnight Black' },
+    { id: 'bg-white text-black', name: 'Clean White' },
+    { id: 'bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-600 text-black', name: 'Gold Foil' },
+    { id: 'bg-gradient-to-br from-blue-600 via-indigo-700 to-slate-900 text-white', name: 'Sapphire Frost' },
+    { id: 'bg-gradient-to-br from-emerald-600 via-teal-800 to-slate-900 text-white', name: 'Emerald Cyber' },
+    { id: 'bg-gradient-to-br from-purple-700 via-pink-600 to-rose-900 text-white', name: 'Holographic Violet' },
+    { id: 'bg-gradient-to-br from-red-600 via-rose-700 to-black text-white', name: 'Crimson Fire' }
+  ];
+
+  const presetPosters = [
+    { name: 'Champions Gold', url: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=800&auto=format&fit=crop' },
+    { name: 'Sapphire Stadium', url: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=800&auto=format&fit=crop' },
+    { name: 'Neon Striker', url: 'https://images.unsplash.com/photo-1518091043644-c1d4457512c6?q=80&w=800&auto=format&fit=crop' },
+    { name: 'Arena Lights', url: 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?q=80&w=800&auto=format&fit=crop' },
+    { name: 'Obsidian Shield', url: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800&auto=format&fit=crop' }
+  ];
+
+  const allAvailableEditions = Array.from(new Set([
+    ...cards.map(c => c.edition).filter(Boolean),
+    '1st Edition',
+    'Base Edition',
+    'Sapphire Edition',
+    'Emerald Edition',
+    'Signature Edition',
+    'Chrome Edition',
+    'Golden Era',
+    'World Cup Edition'
+  ])).sort();
 
   const handleSavePack = async () => {
     if (!editingPack) return;
@@ -279,7 +369,7 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
     }
   };
 
-  const handleChangePack = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChangePack = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setPackEditForm(prev => ({
       ...prev,
@@ -785,16 +875,16 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
         {/* TAB 3: PACK CONFIGURATION */}
         {activeTab === 'packs' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h3 className="text-xl font-black uppercase tracking-widest">MANAGE PACK CONFIGURATIONS</h3>
                 <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                  Configure digital pack prices, drop rate odds, and cards per pack.
+                  Decide card editions, customize pack poster artwork, set prices, and configure drop odds.
                 </p>
               </div>
               <button
                 onClick={handleCreatePack}
-                className="flex items-center gap-2 bg-[#D4FF00] hover:bg-black hover:text-white text-black border-2 border-black px-4 py-2 text-xs font-black uppercase tracking-widest transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+                className="flex items-center justify-center gap-2 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-4 py-2 text-xs font-black uppercase tracking-widest transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
               >
                 <Plus size={16} /> ADD NEW PACK
               </button>
@@ -803,39 +893,108 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {currentPacks.map((pack) => {
                 const odds = pack.rarityOdds || { base: 60, silver: 30, gold: 9, shield: 1 };
+                const packEditions = pack.editions || [];
+                const isAllEditions = packEditions.length === 0 || packEditions.includes('ALL');
+                
+                // Calculate how many cards in database match this pack's editions
+                const matchingCardsCount = isAllEditions 
+                  ? cards.length 
+                  : cards.filter(c => c.edition && packEditions.includes(c.edition)).length;
+
                 return (
-                  <div key={pack.id} className="border-4 border-black p-6 bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between">
+                  <div 
+                    key={pack.id} 
+                    className="border-4 border-black p-6 bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between relative group"
+                  >
                     <div>
+                      {/* Pack Badge & Price */}
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-black uppercase bg-black text-white px-2 py-0.5">
-                          {pack.size} CARDS
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-black uppercase bg-black text-white px-2 py-0.5 border border-black">
+                            {pack.size} CARDS
+                          </span>
+                          {pack.badgeText && (
+                            <span className="text-[9px] font-black uppercase bg-[#D4FF00] text-black px-2 py-0.5 border border-black animate-pulse">
+                              {pack.badgeText}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-xl font-black">{formatCurrency(pack.price)}</span>
                       </div>
-                      <h4 className="text-2xl font-black uppercase">{pack.name}</h4>
-                      <p className="text-xs font-bold text-neutral-600 mt-1">{pack.description || 'Standard digital collectible pack.'}</p>
+
+                      {/* Poster Thumbnail & Name */}
+                      <div className="flex gap-4 items-start mb-4">
+                        {pack.coverPhotoUrl ? (
+                          <div className="w-20 aspect-[750/1050] shrink-0 border-2 border-black bg-neutral-100 overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                            <img 
+                              src={pack.coverPhotoUrl} 
+                              alt={pack.name} 
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-20 aspect-[750/1050] shrink-0 border-2 border-black bg-neutral-100 flex flex-col items-center justify-center text-neutral-400">
+                            <PackageOpen size={28} />
+                            <span className="text-[7px] font-black uppercase mt-1">NO POSTER</span>
+                          </div>
+                        )}
+
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-xl font-black uppercase tracking-tight truncate">{pack.name}</h4>
+                          <p className="text-[11px] font-bold text-neutral-600 line-clamp-2 mt-1">
+                            {pack.description || 'Standard digital collectible pack.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Decided Editions Badge */}
+                      <div className="bg-neutral-50 border-2 border-black p-2.5 mb-3 space-y-1">
+                        <div className="flex items-center justify-between text-[9px] font-black uppercase text-neutral-500">
+                          <span className="flex items-center gap-1">
+                            <Tag size={10} /> INCLUDED EDITIONS:
+                          </span>
+                          <span className="text-black font-mono">
+                            {matchingCardsCount} cards eligible
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {isAllEditions ? (
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-black text-[#D4FF00] border border-black">
+                              ALL EDITIONS (FULL POOL)
+                            </span>
+                          ) : (
+                            packEditions.map(ed => (
+                              <span key={ed} className="text-[9px] font-black uppercase px-1.5 py-0.5 bg-[#D4FF00] text-black border border-black">
+                                {ed}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </div>
                       
-                      <div className="mt-4 bg-neutral-100 p-3 border border-black text-[10px] font-black space-y-1">
-                        <div className="text-neutral-500">DROP RATE ODDS:</div>
-                        <div className="grid grid-cols-2 gap-1 font-mono">
+                      {/* Odds Pill */}
+                      <div className="bg-neutral-100 p-2.5 border border-black text-[10px] font-black space-y-1">
+                        <div className="text-neutral-500 text-[9px]">DROP RATE ODDS:</div>
+                        <div className="grid grid-cols-2 gap-1 font-mono text-[10px]">
                           <div>BASE: {odds.base}%</div>
                           <div>SILVER: {odds.silver}%</div>
                           <div>GOLD: {odds.gold}%</div>
-                          <div className="text-[#849a00]">1-OF-1: {odds.shield}%</div>
+                          <div className="text-lime-700">1-OF-1: {odds.shield}%</div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex gap-2 pt-6 border-t-2 border-black mt-6">
+                    <div className="flex gap-2 pt-4 border-t-2 border-black mt-4">
                       <button
                         onClick={() => handleEditPack(pack)}
-                        className="flex-1 py-2 bg-neutral-100 hover:bg-black hover:text-white border-2 border-black font-black uppercase text-xs transition-colors"
+                        className="flex-1 py-2 bg-neutral-100 hover:bg-[#D4FF00] hover:text-black border-2 border-black font-black uppercase text-xs transition-colors flex items-center justify-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                       >
-                        EDIT PACK
+                        <Edit2 size={13} /> CONFIGURE
                       </button>
                       <button
                         onClick={() => handleDeletePack(pack)}
                         className="p-2 bg-red-100 hover:bg-red-600 hover:text-white border-2 border-red-600 text-red-600 transition-colors"
+                        title="Delete Pack"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -1030,47 +1189,73 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
       {/* Edit Pack Modal */}
       {editingPack && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 overflow-y-auto backdrop-blur-sm">
-          <div className="bg-white w-full max-w-xl border-4 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] my-8">
-            <div className="bg-black text-white p-5 flex items-center justify-between border-b-4 border-black">
-              <h3 className="text-xl font-black uppercase text-[#D4FF00]">
-                CONFIGURE PACK
-              </h3>
+          <div className="bg-white w-full max-w-3xl border-4 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] my-8 max-h-[90vh] flex flex-col">
+            <div className="bg-black text-white p-5 flex items-center justify-between border-b-4 border-black shrink-0">
+              <div>
+                <h3 className="text-xl font-black uppercase text-[#D4FF00] flex items-center gap-2">
+                  <PackageOpen size={22} /> CONFIGURE PACK & EDITIONS
+                </h3>
+                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                  Decide card editions, edit pack poster artwork, set pricing and drop odds.
+                </p>
+              </div>
               <button
                 onClick={() => setEditingPack(null)}
-                className="bg-white text-black hover:bg-[#D4FF00] p-1.5 border-2 border-black font-black"
+                className="bg-white text-black hover:bg-[#D4FF00] p-1.5 border-2 border-black font-black transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={(e) => { e.preventDefault(); handleSavePack(); }} className="p-6 space-y-4">
+            <form onSubmit={(e) => { e.preventDefault(); handleSavePack(); }} className="p-6 space-y-6 overflow-y-auto flex-1">
+              {/* Section 1: Basic Information */}
               <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-neutral-500 mb-1">PACK NAME</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={packEditForm.name || ''}
-                    onChange={handleChangePack}
-                    className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs uppercase"
-                    required
-                  />
+                <div className="flex items-center gap-2 border-b-2 border-black pb-1.5">
+                  <span className="bg-black text-white text-[10px] font-black px-2 py-0.5 uppercase">STEP 1</span>
+                  <h4 className="text-xs font-black uppercase tracking-widest text-neutral-900">GENERAL PACK INFO</h4>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-black uppercase text-neutral-600 mb-1">PACK NAME</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={packEditForm.name || ''}
+                      onChange={handleChangePack}
+                      className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs uppercase"
+                      placeholder="e.g. 1ST EDITION DIAMOND PACK"
+                      required
+                    />
+                  </div>
+
                   <div>
-                    <label className="block text-[10px] font-black uppercase text-neutral-500 mb-1">PRICE (৳)</label>
+                    <label className="block text-[10px] font-black uppercase text-neutral-600 mb-1">BADGE / RIBBON TEXT (OPTIONAL)</label>
+                    <input
+                      type="text"
+                      name="badgeText"
+                      value={packEditForm.badgeText || ''}
+                      onChange={handleChangePack}
+                      className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs uppercase"
+                      placeholder="e.g. 🔥 BEST VALUE / ⚡ EXCLUSIVE"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-neutral-600 mb-1">PRICE (৳)</label>
                     <input
                       type="number"
                       name="price"
                       value={packEditForm.price || 0}
                       onChange={handleChangePack}
-                      className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs"
+                      className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs font-mono"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black uppercase text-neutral-500 mb-1">CARDS PER PACK</label>
+                    <label className="block text-[10px] font-black uppercase text-neutral-600 mb-1">CARDS PER PACK</label>
                     <input
                       type="number"
                       min="1"
@@ -1078,72 +1263,354 @@ export function ManageShop({ cards, packs, themes }: ManageShopProps) {
                       name="size"
                       value={packEditForm.size || 5}
                       onChange={handleChangePack}
-                      className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs"
+                      className="w-full bg-neutral-50 border-2 border-black p-2 font-black text-xs font-mono"
                       required
                     />
                   </div>
                 </div>
 
-                {/* Drop Odds Configuration */}
-                <div className="border-2 border-black p-4 bg-neutral-50 space-y-3">
-                  <span className="block text-[10px] font-black uppercase text-neutral-600">
-                    DROP RATE ODDS DISTRIBUTION (%)
-                  </span>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-neutral-600 mb-1">PACK DESCRIPTION</label>
+                  <textarea
+                    name="description"
+                    rows={2}
+                    value={packEditForm.description || ''}
+                    onChange={handleChangePack}
+                    className="w-full bg-neutral-50 border-2 border-black p-2 font-bold text-xs"
+                    placeholder="Short description displayed on the shop card..."
+                  />
+                </div>
+              </div>
+
+              {/* Section 2: Card Editions Decider */}
+              <div className="space-y-4 border-2 border-black p-4 bg-amber-50/50">
+                <div className="flex items-center justify-between border-b border-black/20 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Tag size={16} className="text-black" />
                     <div>
-                      <label className="block text-[9px] font-black uppercase text-neutral-500">BASE %</label>
-                      <input
-                        type="number"
-                        value={packEditForm.rarityOdds?.base ?? 60}
-                        onChange={(e) => handlePackOddsChange('base', Number(e.target.value))}
-                        className="w-full bg-white border border-black p-1.5 text-xs font-mono font-bold"
-                      />
+                      <h4 className="text-xs font-black uppercase tracking-widest text-black">
+                        CARD EDITIONS DECIDER
+                      </h4>
+                      <p className="text-[9px] font-bold text-neutral-600">
+                        Choose which card edition(s) this pack will draw from when opened.
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black uppercase text-neutral-500">SILVER %</label>
-                      <input
-                        type="number"
-                        value={packEditForm.rarityOdds?.silver ?? 30}
-                        onChange={(e) => handlePackOddsChange('silver', Number(e.target.value))}
-                        className="w-full bg-white border border-black p-1.5 text-xs font-mono font-bold"
-                      />
+                  </div>
+
+                  {/* Mode Toggle */}
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setPackEditForm(prev => ({ ...prev, editions: [] }))}
+                      className={`text-[9px] font-black uppercase px-2.5 py-1 border border-black transition-colors ${
+                        !packEditForm.editions || packEditForm.editions.length === 0
+                          ? 'bg-black text-[#D4FF00]'
+                          : 'bg-white text-black hover:bg-neutral-100'
+                      }`}
+                    >
+                      ALL EDITIONS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!packEditForm.editions || packEditForm.editions.length === 0) {
+                          setPackEditForm(prev => ({ ...prev, editions: ['1st Edition'] }));
+                        }
+                      }}
+                      className={`text-[9px] font-black uppercase px-2.5 py-1 border border-black transition-colors ${
+                        packEditForm.editions && packEditForm.editions.length > 0
+                          ? 'bg-[#D4FF00] text-black font-black'
+                          : 'bg-white text-black hover:bg-neutral-100'
+                      }`}
+                    >
+                      CUSTOM EDITIONS ONLY
+                    </button>
+                  </div>
+                </div>
+
+                {packEditForm.editions && packEditForm.editions.length > 0 ? (
+                  <div className="space-y-3">
+                    <span className="block text-[9px] font-black uppercase text-neutral-600">
+                      SELECT INCLUDED EDITIONS FOR THIS PACK:
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {allAvailableEditions.map(ed => {
+                        const isSelected = (packEditForm.editions || []).includes(ed);
+                        const countInDb = cards.filter(c => c.edition === ed).length;
+                        return (
+                          <button
+                            key={ed}
+                            type="button"
+                            onClick={() => handleTogglePackEdition(ed)}
+                            className={`p-2 border-2 border-black text-left flex items-center justify-between transition-colors text-xs font-black uppercase ${
+                              isSelected ? 'bg-black text-[#D4FF00] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white text-black hover:bg-neutral-100'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              {isSelected ? <CheckSquare size={14} className="text-[#D4FF00] shrink-0" /> : <Square size={14} className="text-neutral-400 shrink-0" />}
+                              <span className="truncate">{ed}</span>
+                            </div>
+                            <span className={`text-[9px] font-mono shrink-0 ml-1 px-1 py-0.2 border ${isSelected ? 'border-[#D4FF00]/40 text-neutral-300' : 'border-neutral-300 text-neutral-500'}`}>
+                              {countInDb}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black uppercase text-neutral-500">GOLD %</label>
+
+                    {/* Add Custom Edition Name */}
+                    <div className="flex gap-2 pt-2 border-t border-black/10">
                       <input
-                        type="number"
-                        value={packEditForm.rarityOdds?.gold ?? 9}
-                        onChange={(e) => handlePackOddsChange('gold', Number(e.target.value))}
-                        className="w-full bg-white border border-black p-1.5 text-xs font-mono font-bold"
+                        type="text"
+                        value={customEditionInput}
+                        onChange={(e) => setCustomEditionInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCustomEdition(); } }}
+                        placeholder="ADD CUSTOM EDITION NAME (e.g. WORLD CUP 2026)"
+                        className="flex-1 bg-white border-2 border-black p-1.5 text-xs font-black uppercase"
                       />
+                      <button
+                        type="button"
+                        onClick={handleAddCustomEdition}
+                        className="bg-black text-[#D4FF00] hover:bg-neutral-800 px-3 py-1.5 text-xs font-black uppercase border-2 border-black shrink-0"
+                      >
+                        + ADD
+                      </button>
                     </div>
+
+                    {/* Eligible Cards Summary Banner */}
+                    <div className="bg-white border-2 border-black p-2.5 flex items-center justify-between text-xs font-black">
+                      <span className="text-neutral-700 uppercase">
+                        🎯 ELIGIBLE CARDS IN DATABASE:
+                      </span>
+                      <span className="bg-[#D4FF00] text-black px-2 py-0.5 border border-black font-mono">
+                        {cards.filter(c => c.edition && (packEditForm.editions || []).includes(c.edition)).length} CARDS MATCH
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-white border-2 border-black text-xs font-bold text-neutral-700 flex items-center justify-between">
+                    <span className="uppercase">🌐 FULL DATABASE POOL (NO RESTRICTIONS):</span>
+                    <span className="font-mono bg-black text-[#D4FF00] px-2 py-0.5 border border-black text-[11px] font-black">
+                      {cards.length} TOTAL CARDS AVAILABLE
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Section 3: Pack Poster & Visual Customization */}
+              <div className="space-y-4 border-2 border-black p-4 bg-blue-50/40">
+                <div className="flex items-center gap-2 border-b border-black/20 pb-2">
+                  <ImageIcon size={16} className="text-black" />
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-widest text-black">
+                      PACK POSTER & COVER ARTWORK
+                    </h4>
+                    <p className="text-[9px] font-bold text-neutral-600">
+                      Provide an image URL, upload a custom poster file, or select a preset cover.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Controls (2 cols) */}
+                  <div className="md:col-span-2 space-y-3">
+                    {/* Poster URL */}
                     <div>
-                      <label className="block text-[9px] font-black uppercase text-neutral-500">1-OF-1 %</label>
-                      <input
-                        type="number"
-                        value={packEditForm.rarityOdds?.shield ?? 1}
-                        onChange={(e) => handlePackOddsChange('shield', Number(e.target.value))}
-                        className="w-full bg-white border border-black p-1.5 text-xs font-mono font-bold"
-                      />
+                      <label className="block text-[9px] font-black uppercase text-neutral-600 mb-1">
+                        POSTER IMAGE URL
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="url"
+                          name="coverPhotoUrl"
+                          value={packEditForm.coverPhotoUrl || ''}
+                          onChange={handleChangePack}
+                          placeholder="https://example.com/pack-poster.jpg"
+                          className="flex-1 bg-white border-2 border-black p-2 font-mono text-xs"
+                        />
+                        {packEditForm.coverPhotoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setPackEditForm(prev => ({ ...prev, coverPhotoUrl: '' }))}
+                            className="bg-red-100 hover:bg-red-600 hover:text-white text-red-600 border-2 border-red-600 px-2.5 text-xs font-black uppercase transition-colors"
+                          >
+                            REMOVE
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Upload Custom File */}
+                    <div>
+                      <label className="block text-[9px] font-black uppercase text-neutral-600 mb-1">
+                        OR UPLOAD FROM DEVICE
+                      </label>
+                      <label className="flex items-center justify-center gap-2 bg-white hover:bg-neutral-100 border-2 border-black p-2.5 font-black text-xs uppercase cursor-pointer transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        <Upload size={14} />
+                        CHOOSE POSTER IMAGE FILE
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePosterFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    {/* Preset Posters */}
+                    <div>
+                      <label className="block text-[9px] font-black uppercase text-neutral-600 mb-1.5">
+                        QUICK PRESET POSTERS
+                      </label>
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {presetPosters.map((preset) => (
+                          <button
+                            key={preset.name}
+                            type="button"
+                            onClick={() => setPackEditForm(prev => ({ ...prev, coverPhotoUrl: preset.url }))}
+                            className={`p-1 border-2 border-black text-center transition-all ${
+                              packEditForm.coverPhotoUrl === preset.url
+                                ? 'bg-black text-[#D4FF00] scale-105 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                : 'bg-white hover:bg-neutral-100'
+                            }`}
+                          >
+                            <img src={preset.url} alt={preset.name} className="w-full aspect-[750/1050] object-cover border border-black/40 mb-1" />
+                            <span className="block text-[7px] font-black uppercase leading-tight truncate">{preset.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Pack Theme Box Color */}
+                    <div>
+                      <label className="block text-[9px] font-black uppercase text-neutral-600 mb-1.5 flex items-center gap-1">
+                        <Palette size={12} /> PACK FOIL BOX THEME
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                        {packThemes.map(theme => (
+                          <button
+                            key={theme.name}
+                            type="button"
+                            onClick={() => setPackEditForm(prev => ({ ...prev, color: theme.id }))}
+                            className={`p-2 border-2 border-black text-[9px] font-black uppercase transition-all flex items-center justify-between ${theme.id} ${
+                              packEditForm.color === theme.id ? 'ring-2 ring-black scale-105 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'opacity-85 hover:opacity-100'
+                            }`}
+                          >
+                            <span className="truncate">{theme.name}</span>
+                            {packEditForm.color === theme.id && <Check size={12} strokeWidth={3} className="shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Live Poster Card Preview (1 col) */}
+                  <div className="flex flex-col items-center justify-center p-3 bg-white border-2 border-black">
+                    <span className="text-[9px] font-black uppercase text-neutral-500 mb-2">LIVE PACK POSTER PREVIEW</span>
+                    <div className={`w-36 aspect-[750/1050] ${packEditForm.color || 'bg-white'} border-3 border-black p-2 flex flex-col justify-between items-center text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden`}>
+                      <div className="w-full flex justify-between items-center text-[7px] font-black uppercase">
+                        <span className="bg-black text-white px-1 py-0.2">{packEditForm.size || 5} CARDS</span>
+                        <span className="font-bold">{formatCurrency(packEditForm.price || 0)}</span>
+                      </div>
+
+                      {packEditForm.coverPhotoUrl ? (
+                        <img
+                          src={packEditForm.coverPhotoUrl}
+                          alt="Poster Preview"
+                          className="w-24 aspect-[750/1050] object-cover border border-black my-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)]"
+                        />
+                      ) : (
+                        <div className="w-20 h-24 bg-black/10 border border-black flex flex-col items-center justify-center text-neutral-500">
+                          <PackageOpen size={24} />
+                          <span className="text-[6px] font-black mt-0.5">NO POSTER</span>
+                        </div>
+                      )}
+
+                      <div className="w-full text-center">
+                        <span className="block text-[8px] font-black uppercase truncate leading-tight">
+                          {packEditForm.name || 'PACK TITLE'}
+                        </span>
+                        {packEditForm.badgeText && (
+                          <span className="inline-block text-[6px] font-black bg-[#D4FF00] text-black px-1 border border-black mt-0.5">
+                            {packEditForm.badgeText}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="pt-4 flex gap-3">
+              {/* Section 4: Drop Odds Configuration */}
+              <div className="border-2 border-black p-4 bg-neutral-50 space-y-3">
+                <div className="flex items-center justify-between border-b border-black/10 pb-1.5">
+                  <span className="block text-[10px] font-black uppercase text-neutral-700">
+                    DROP RATE ODDS DISTRIBUTION (%)
+                  </span>
+                  <span className={`text-[10px] font-mono font-black ${
+                    ((packEditForm.rarityOdds?.base ?? 60) + (packEditForm.rarityOdds?.silver ?? 30) + (packEditForm.rarityOdds?.gold ?? 9) + (packEditForm.rarityOdds?.shield ?? 1)) === 100
+                      ? 'text-green-600'
+                      : 'text-amber-600'
+                  }`}>
+                    TOTAL: {(packEditForm.rarityOdds?.base ?? 60) + (packEditForm.rarityOdds?.silver ?? 30) + (packEditForm.rarityOdds?.gold ?? 9) + (packEditForm.rarityOdds?.shield ?? 1)}%
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div>
+                    <label className="block text-[9px] font-black uppercase text-neutral-500">BASE %</label>
+                    <input
+                      type="number"
+                      value={packEditForm.rarityOdds?.base ?? 60}
+                      onChange={(e) => handlePackOddsChange('base', Number(e.target.value))}
+                      className="w-full bg-white border-2 border-black p-1.5 text-xs font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black uppercase text-neutral-500">SILVER %</label>
+                    <input
+                      type="number"
+                      value={packEditForm.rarityOdds?.silver ?? 30}
+                      onChange={(e) => handlePackOddsChange('silver', Number(e.target.value))}
+                      className="w-full bg-white border-2 border-black p-1.5 text-xs font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black uppercase text-neutral-500">GOLD %</label>
+                    <input
+                      type="number"
+                      value={packEditForm.rarityOdds?.gold ?? 9}
+                      onChange={(e) => handlePackOddsChange('gold', Number(e.target.value))}
+                      className="w-full bg-white border-2 border-black p-1.5 text-xs font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black uppercase text-neutral-500">1-OF-1 %</label>
+                    <input
+                      type="number"
+                      value={packEditForm.rarityOdds?.shield ?? 1}
+                      onChange={(e) => handlePackOddsChange('shield', Number(e.target.value))}
+                      className="w-full bg-white border-2 border-black p-1.5 text-xs font-mono font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex gap-3">
                 <button
                   type="button"
                   onClick={() => setEditingPack(null)}
-                  className="flex-1 py-3 bg-white border-2 border-black font-black uppercase text-xs"
+                  className="flex-1 py-3.5 bg-white hover:bg-neutral-100 border-2 border-black font-black uppercase text-xs transition-colors"
                 >
                   CANCEL
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 py-3 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] border-2 border-black font-black uppercase text-xs transition-colors"
+                  className="flex-1 py-3.5 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] border-2 border-black font-black uppercase text-xs transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
                 >
-                  {isSaving ? 'SAVING...' : 'SAVE PACK'}
+                  {isSaving ? 'SAVING CONFIGURATION...' : 'SAVE PACK CONFIGURATION'}
                 </button>
               </div>
             </form>

@@ -85,8 +85,20 @@ export function PackOpeningModal({
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full duration-1000 transition-transform pointer-events-none" />
               
               <div className="text-center w-full z-10">
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-70">ARTCARD SERIES 2024</span>
+                <div className="flex items-center justify-center gap-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-70">ARTCARD SERIES 2024</span>
+                  {pack.badgeText && (
+                    <span className="text-[8px] font-black uppercase px-1.5 py-0.2 bg-[#D4FF00] text-black border border-black animate-pulse">
+                      {pack.badgeText}
+                    </span>
+                  )}
+                </div>
                 <h3 className="text-2xl font-black uppercase tracking-tight mt-1">{pack.name}</h3>
+                {pack.editions && pack.editions.length > 0 && (
+                  <span className="inline-block text-[8px] font-black uppercase bg-black text-[#D4FF00] px-2 py-0.5 border border-[#D4FF00]/40 mt-1">
+                    {pack.editions.join(' • ')}
+                  </span>
+                )}
               </div>
 
               {pack.coverPhotoUrl ? (
