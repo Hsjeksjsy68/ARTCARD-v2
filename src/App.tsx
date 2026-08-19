@@ -62,6 +62,7 @@ export default function App() {
   
   // Mobile drawer & filter tray states
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isDesktopMoreOpen, setIsDesktopMoreOpen] = useState(false);
   const [isFilterTrayOpen, setIsFilterTrayOpen] = useState(false);
 
   // Public profile modal viewing target
@@ -306,6 +307,7 @@ export default function App() {
   const switchTab = (tab: 'database' | 'vault' | 'favorites' | 'marketplace' | 'leaderboard' | 'admin' | 'manage' | 'shop' | 'custom' | 'profile' | 'collection') => {
     setSelectedCard(null);
     setIsMobileMenuOpen(false);
+    setIsDesktopMoreOpen(false);
     if (tab === 'collection') {
       setActiveTab('vault');
     } else {
@@ -429,119 +431,166 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-white text-black flex flex-col font-sans uppercase selection:bg-[#D4FF00] selection:text-black">
-      {/* Header (Responsive for PC & Phone) */}
+      {/* Header (Responsive for PC, Laptops & Phones) */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b-2 border-black">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-2">
+        <div className="max-w-7xl w-full mx-auto px-2.5 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-1.5 sm:gap-4">
           
-          {/* Logo & Desktop Nav */}
-          <div className="flex items-center gap-3 lg:gap-8 min-w-0">
+          {/* Left: Brand Logo & Desktop Nav Links */}
+          <div className="flex items-center gap-2 sm:gap-4 lg:gap-6 shrink-0 min-w-0">
             <div 
               onClick={() => switchTab('database')}
               className="flex items-center gap-1.5 cursor-pointer group shrink-0"
             >
-              <div className="w-8 h-8 bg-black text-[#D4FF00] border-2 border-black flex items-center justify-center font-black text-sm group-hover:bg-[#D4FF00] group-hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-black text-[#D4FF00] border-2 border-black flex items-center justify-center font-black text-xs sm:text-sm group-hover:bg-[#D4FF00] group-hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                 AC
               </div>
               <div className="flex flex-col">
-                <span className="text-xl sm:text-2xl font-black tracking-tighter text-black uppercase leading-none group-hover:text-neutral-700 transition-colors">
+                <span className="text-lg sm:text-2xl font-black tracking-tighter text-black uppercase leading-none group-hover:text-neutral-700 transition-colors">
                   ARTCARD
                 </span>
-                <span className="hidden sm:inline-block text-[8px] font-black tracking-widest text-neutral-500 uppercase mt-0.5">
+                <span className="hidden md:inline-block text-[8px] font-black tracking-widest text-neutral-500 uppercase mt-0.5">
                   COLLECTIVE HUB
                 </span>
               </div>
             </div>
             
-            {/* Desktop Navigation Links */}
-            <nav className="hidden lg:flex items-center gap-1 xl:gap-2 text-xs font-black tracking-wider text-neutral-600 uppercase">
+            {/* Desktop Clean Navigation Bar */}
+            <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 text-[11px] xl:text-xs font-black tracking-wider text-neutral-600 uppercase">
               <button 
                 onClick={() => switchTab('database')}
-                className={`px-3 py-2 border-b-2 transition-all ${
+                className={`px-2.5 xl:px-3 py-1.5 sm:py-2 border-b-2 transition-all whitespace-nowrap ${
                   activeTab === 'database' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
                 }`}
               >
                 DATABASE
               </button>
+
               <button 
                 onClick={() => switchTab('marketplace')}
-                className={`px-3 py-2 border-b-2 flex items-center gap-1.5 transition-all ${
+                className={`px-2.5 xl:px-3 py-1.5 sm:py-2 border-b-2 flex items-center gap-1 transition-all whitespace-nowrap ${
                   activeTab === 'marketplace' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
                 }`}
               >
                 <ShoppingCart size={13} />
                 MARKET
               </button>
+
               <button 
                 onClick={() => switchTab('vault')}
-                className={`px-3 py-2 border-b-2 flex items-center gap-1.5 transition-all ${
+                className={`px-2.5 xl:px-3 py-1.5 sm:py-2 border-b-2 flex items-center gap-1 transition-all whitespace-nowrap ${
                   activeTab === 'vault' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
                 }`}
               >
                 <Trophy size={13} />
                 VAULT ({vaultIds.size})
               </button>
+
               <button 
                 onClick={() => switchTab('leaderboard')}
-                className={`px-3 py-2 border-b-2 flex items-center gap-1.5 transition-all ${
+                className={`px-2.5 xl:px-3 py-1.5 sm:py-2 border-b-2 flex items-center gap-1 transition-all whitespace-nowrap ${
                   activeTab === 'leaderboard' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
                 }`}
               >
                 <Medal size={13} />
-                LEADERBOARD
+                RANKS
               </button>
+
               <button 
                 onClick={() => switchTab('shop')}
-                className={`px-3 py-2 border-b-2 flex items-center gap-1.5 transition-all ${
+                className={`px-2.5 xl:px-3 py-1.5 sm:py-2 border-b-2 flex items-center gap-1 transition-all whitespace-nowrap ${
                   activeTab === 'shop' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
                 }`}
               >
                 <Sparkles size={13} />
                 SHOP
               </button>
-              <button 
-                onClick={() => switchTab('custom')}
-                className={`px-3 py-2 border-b-2 flex items-center gap-1.5 transition-all ${
-                  activeTab === 'custom' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
-                }`}
-              >
-                <Palette size={13} />
-                CUSTOM
-              </button>
-              <button 
-                onClick={() => switchTab('favorites')}
-                className={`px-3 py-2 border-b-2 flex items-center gap-1.5 transition-all ${
-                  activeTab === 'favorites' && !selectedCard ? 'text-black border-black bg-neutral-100' : 'border-transparent hover:text-black hover:bg-neutral-50'
-                }`}
-              >
-                <Heart size={13} className={favoriteIds.size > 0 ? "text-red-500 fill-red-500" : "text-neutral-400"} />
-                FAVS ({favoriteIds.size})
-              </button>
-              {isAdminUser && (
-                <>
-                  <button 
-                    onClick={() => switchTab('admin')}
-                    className={`px-2.5 py-1.5 text-[11px] font-black border border-black transition-all ${
-                      activeTab === 'admin' && !selectedCard ? 'bg-[#D4FF00] text-black' : 'bg-neutral-100 hover:bg-neutral-200'
-                    }`}
-                  >
-                    + ADD CARD
-                  </button>
-                  <button 
-                    onClick={() => switchTab('manage')}
-                    className={`px-2.5 py-1.5 text-[11px] font-black border border-black transition-all ${
-                      activeTab === 'manage' && !selectedCard ? 'bg-[#D4FF00] text-black' : 'bg-neutral-100 hover:bg-neutral-200'
-                    }`}
-                  >
-                    MANAGE
-                  </button>
-                </>
-              )}
+
+              {/* Desktop "MORE" Dropdown (Houses Custom, Favorites & Admin Tools) */}
+              <div className="relative">
+                <button
+                  onClick={() => setIsDesktopMoreOpen(!isDesktopMoreOpen)}
+                  className={`px-2.5 xl:px-3 py-1.5 sm:py-2 border-b-2 flex items-center gap-1 transition-all whitespace-nowrap ${
+                    isDesktopMoreOpen || ['custom', 'favorites', 'admin', 'manage'].includes(activeTab)
+                      ? 'text-black border-black bg-neutral-100 font-black'
+                      : 'border-transparent hover:text-black hover:bg-neutral-50'
+                  }`}
+                >
+                  <span>MORE</span>
+                  <ChevronDown size={12} className={`transition-transform ${isDesktopMoreOpen ? 'rotate-180' : ''}`} />
+                  {favoriteIds.size > 0 && (
+                    <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />
+                  )}
+                </button>
+
+                {/* Dropdown Menu Modal */}
+                {isDesktopMoreOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setIsDesktopMoreOpen(false)} 
+                    />
+                    <div className="absolute left-0 mt-2 w-52 bg-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <button
+                        onClick={() => switchTab('favorites')}
+                        className={`w-full px-3 py-2 text-left flex items-center justify-between text-xs font-black hover:bg-[#D4FF00] hover:text-black transition-colors ${
+                          activeTab === 'favorites' ? 'bg-neutral-100 text-black' : 'text-neutral-700'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Heart size={14} className={favoriteIds.size > 0 ? "text-red-500 fill-red-500" : "text-neutral-400"} />
+                          MY FAVORITES
+                        </span>
+                        <span className="text-[10px] bg-neutral-200 px-1.5 py-0.5 rounded font-black text-black">
+                          {favoriteIds.size}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => switchTab('custom')}
+                        className={`w-full px-3 py-2 text-left flex items-center gap-2 text-xs font-black hover:bg-[#D4FF00] hover:text-black transition-colors ${
+                          activeTab === 'custom' ? 'bg-neutral-100 text-black' : 'text-neutral-700'
+                        }`}
+                      >
+                        <Palette size={14} />
+                        CUSTOM CARD BUILDER
+                      </button>
+
+                      {isAdminUser && (
+                        <>
+                          <div className="my-1 border-t border-neutral-200" />
+                          <div className="px-3 py-1 text-[9px] font-black text-neutral-400 tracking-widest uppercase">
+                            ADMIN TOOLS
+                          </div>
+                          <button
+                            onClick={() => switchTab('admin')}
+                            className={`w-full px-3 py-2 text-left flex items-center gap-2 text-xs font-black hover:bg-[#D4FF00] hover:text-black transition-colors ${
+                              activeTab === 'admin' ? 'bg-neutral-100 text-black' : 'text-neutral-700'
+                            }`}
+                          >
+                            <Plus size={14} />
+                            ADD NEW CARD
+                          </button>
+                          <button
+                            onClick={() => switchTab('manage')}
+                            className={`w-full px-3 py-2 text-left flex items-center gap-2 text-xs font-black hover:bg-[#D4FF00] hover:text-black transition-colors ${
+                              activeTab === 'manage' ? 'bg-neutral-100 text-black' : 'text-neutral-700'
+                            }`}
+                          >
+                            <Layers size={14} />
+                            MANAGE PACK SHOP
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </nav>
           </div>
 
-          {/* Right Header: Wallet Balance, Portfolio & User Profile */}
-          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-            {/* Wallet Quick Balance & Top-Up Button */}
+          {/* Right: Wallet Balance, User Auth & Mobile Hamburger */}
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            {/* Wallet Quick Balance / Top-Up Pill */}
             <button
               onClick={() => {
                 if (!user) {
@@ -550,18 +599,12 @@ export default function App() {
                   setIsWalletOpen(true);
                 }
               }}
-              className="flex items-center gap-1 sm:gap-2 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5"
-              title="Click to manage ARTCOIN wallet balance"
+              className="flex items-center gap-1 bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black border-2 border-black px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5 whitespace-nowrap"
+              title="Click to top-up ARTCOIN wallet balance"
             >
-              <DollarSign size={13} strokeWidth={3} className="shrink-0" />
-              <span>{user ? formatCurrency(walletBalance) : 'TOP UP ৳'}</span>
+              <DollarSign size={12} strokeWidth={3} className="shrink-0" />
+              <span>{user ? formatCurrency(walletBalance) : '৳ TOP UP'}</span>
             </button>
-
-            {/* Vault Portfolio (Desktop only) */}
-            <div className="hidden xl:flex flex-col items-end">
-              <span className="text-[9px] text-neutral-500 uppercase tracking-widest font-black leading-none mb-0.5">Vault Value</span>
-              <span className="text-xs font-black text-black bg-neutral-100 px-2 py-0.5 border border-black">{formatCurrency(vaultValue)}</span>
-            </div>
 
             {/* Profile Avatar / Auth */}
             <UserAuth 
@@ -570,10 +613,10 @@ export default function App() {
               isProfileActive={activeTab === 'profile' && !selectedCard} 
             />
 
-            {/* Mobile Menu Hamburger Button */}
+            {/* Mobile / Tablet Menu Hamburger Button */}
             <button
               onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-2 border-2 border-black bg-white hover:bg-neutral-100 text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5"
+              className="lg:hidden p-1.5 sm:p-2 border-2 border-black bg-white hover:bg-neutral-100 text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5 shrink-0"
               title="Open Navigation Menu"
             >
               <Menu size={18} />
@@ -583,91 +626,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        
-        {/* Mobile Navigation */}
-        <div className="-mx-4 px-4 sm:-mx-6 sm:px-6 mb-8 overflow-hidden">
-          <div className="md:hidden flex gap-2.5 overflow-x-auto pb-4 pt-1 snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            <button 
-              onClick={() => switchTab('database')}
-              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
-                activeTab === 'database' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
-              }`}
-            >
-              DATABASE
-            </button>
-            <button 
-              onClick={() => switchTab('marketplace')}
-              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap flex items-center gap-1.5 ${
-                activeTab === 'marketplace' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
-              }`}
-            >
-              <ShoppingCart size={14} /> MARKETPLACE
-            </button>
-            <button 
-              onClick={() => switchTab('vault')}
-              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap flex items-center gap-1.5 ${
-                activeTab === 'vault' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
-              }`}
-            >
-              <Trophy size={14} /> VAULT ({vaultIds.size})
-            </button>
-            <button 
-              onClick={() => switchTab('leaderboard')}
-              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap flex items-center gap-1.5 ${
-                activeTab === 'leaderboard' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
-              }`}
-            >
-              <Medal size={14} /> LEADERBOARD
-            </button>
-            <button 
-              onClick={() => switchTab('favorites')}
-              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap flex items-center gap-1.5 ${
-                activeTab === 'favorites' && !selectedCard ? 'bg-black text-white shadow-[3px_3px_0px_0px_red] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
-              }`}
-            >
-              <Heart size={14} className="text-red-500 fill-red-500" /> FAVORITES ({favoriteIds.size})
-            </button>
-            <button 
-              onClick={() => switchTab('shop')}
-              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
-                activeTab === 'shop' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
-              }`}
-            >
-              SHOP
-            </button>
-            <button 
-              onClick={() => switchTab('custom')}
-              className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
-                activeTab === 'custom' && !selectedCard ? 'bg-black text-[#D4FF00] shadow-[3px_3px_0px_0px_#D4FF00] -translate-y-0.5' : 'bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-neutral-50'
-              }`}
-            >
-              CUSTOM
-            </button>
-            {(user?.email === 'grakibg@gmail.com' || user?.email === 'wwwrakibcom071@gmail.com' || user?.email === '1@1.com') && (
-              <>
-                <button 
-                  onClick={() => switchTab('admin')}
-                  className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
-                    activeTab === 'admin' && !selectedCard ? 'bg-[#D4FF00] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]' : 'bg-neutral-200 text-black'
-                  }`}
-                >
-                  ADD CARD
-                </button>
-                <button 
-                  onClick={() => switchTab('manage')}
-                  className={`shrink-0 snap-start px-4 py-2.5 text-xs font-black tracking-widest transition-all uppercase border-2 border-black whitespace-nowrap ${
-                    activeTab === 'manage' && !selectedCard ? 'bg-[#D4FF00] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]' : 'bg-neutral-200 text-black'
-                  }`}
-                >
-                  MANAGE
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
+      {/* Main Content (Responsive Padding & Layout) */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 pb-24 lg:pb-12">
         {selectedCard ? (
           <CardPreviewPage
             card={selectedCard}
@@ -749,41 +709,62 @@ export default function App() {
           <CustomCard themes={themes} />
         ) : (
           <>
-            {/* Search, Price & Filters Section */}
-            <div className="mb-10 space-y-4 max-w-5xl">
-              {/* Primary Search Bar */}
-              <div className="relative">
-                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                  <Search size={20} className="text-black" />
+            {/* Search, Price & Filters Section (Mobile & PC Optimized) */}
+            <div className="mb-6 sm:mb-8 space-y-3 sm:space-y-4 max-w-5xl">
+              {/* Primary Search Bar with Filter Tray Toggle */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <div className="absolute inset-y-0 left-3 sm:left-4 flex items-center pointer-events-none">
+                    <Search size={18} className="text-black sm:w-5 sm:h-5" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="SEARCH PLAYERS, TEAMS, SETS..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-white border-2 border-black rounded-none py-2.5 sm:py-3.5 pl-9 sm:pl-12 pr-9 sm:pr-12 text-xs sm:text-sm font-black text-black placeholder-neutral-500 focus:outline-none focus:ring-4 focus:ring-[#D4FF00]/50 transition-colors uppercase tracking-wider shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+                  />
+                  {searchQuery && (
+                    <button 
+                      onClick={() => setSearchQuery('')}
+                      className="absolute inset-y-0 right-3 sm:right-4 flex items-center text-neutral-400 hover:text-black"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
                 </div>
-                <input
-                  type="text"
-                  placeholder="SEARCH PLAYERS, TEAMS, SETS, OR PRICE (E.G. ৳500)..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white border-2 border-black rounded-none py-4 pl-12 pr-12 text-xs sm:text-sm font-black text-black placeholder-neutral-500 focus:outline-none focus:ring-4 focus:ring-[#D4FF00]/50 transition-colors uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-                />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery('')}
-                    className="absolute inset-y-0 right-4 flex items-center text-neutral-400 hover:text-black"
-                  >
-                    <X size={18} />
-                  </button>
-                )}
+
+                {/* Filter Tray Toggle Button */}
+                <button
+                  onClick={() => setIsFilterTrayOpen(!isFilterTrayOpen)}
+                  className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3.5 border-2 border-black font-black text-xs uppercase tracking-wider transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] shrink-0 ${
+                    isFilterTrayOpen || hasActiveFilters
+                      ? 'bg-black text-[#D4FF00]'
+                      : 'bg-white hover:bg-neutral-100 text-black'
+                  }`}
+                  title="Toggle Filters & Sorting"
+                >
+                  <SlidersHorizontal size={14} />
+                  <span className="hidden xs:inline">FILTERS</span>
+                  {activeFiltersCount > 0 && (
+                    <span className="bg-[#D4FF00] text-black text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-black">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                </button>
               </div>
 
-              {/* Price Preset Chips */}
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500 flex items-center gap-1 mr-1">
-                  <span className="font-black text-xs text-black">৳</span> PRICE:
+              {/* Price Preset Chips (Horizontal Swipe) */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-neutral-500 shrink-0 mr-1 flex items-center gap-1">
+                  PRICE:
                 </span>
                 {[
-                  { id: 'all', label: 'ALL PRICES' },
-                  { id: 'under50', label: 'UNDER ৳50' },
-                  { id: '50to200', label: '৳50 - ৳200' },
-                  { id: '200to1000', label: '৳200 - ৳1,000' },
-                  { id: '1000plus', label: '৳1,000+' }
+                  { id: 'all', label: 'ALL' },
+                  { id: 'under50', label: '< ৳50' },
+                  { id: '50to200', label: '৳50-৳200' },
+                  { id: '200to1000', label: '৳200-৳1K' },
+                  { id: '1000plus', label: '৳1K+' }
                 ].map((preset) => (
                   <button
                     key={preset.id}
@@ -792,7 +773,7 @@ export default function App() {
                       setMinPrice('');
                       setMaxPrice('');
                     }}
-                    className={`px-3 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider border-2 border-black transition-all ${
+                    className={`shrink-0 px-2.5 py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider border-2 border-black transition-all ${
                       pricePreset === preset.id && minPrice === '' && maxPrice === ''
                         ? 'bg-black text-[#D4FF00] shadow-[2px_2px_0px_0px_#D4FF00]'
                         : 'bg-white text-black hover:bg-[#D4FF00]'
@@ -801,121 +782,160 @@ export default function App() {
                     {preset.label}
                   </button>
                 ))}
-              </div>
 
-              {/* Advanced Filter Row (Custom Min/Max Price + Select Dropdowns) */}
-              <div className="flex flex-wrap items-center gap-3 pt-1">
-                {/* Min / Max Price Inputs */}
-                <div className="flex items-center gap-1.5 bg-neutral-100 p-1 border-2 border-black">
-                  <span className="text-[10px] font-black uppercase px-1 text-neutral-500">CUSTOM ৳:</span>
-                  <input
-                    type="number"
-                    placeholder="MIN ৳"
-                    value={minPrice}
-                    onChange={(e) => {
-                      setMinPrice(e.target.value);
-                      setPricePreset('all');
-                    }}
-                    className="w-20 bg-white border border-black p-1.5 text-xs font-black uppercase focus:outline-none focus:bg-[#D4FF00]"
-                  />
-                  <span className="text-xs font-bold text-neutral-400">-</span>
-                  <input
-                    type="number"
-                    placeholder="MAX ৳"
-                    value={maxPrice}
-                    onChange={(e) => {
-                      setMaxPrice(e.target.value);
-                      setPricePreset('all');
-                    }}
-                    className="w-20 bg-white border border-black p-1.5 text-xs font-black uppercase focus:outline-none focus:bg-[#D4FF00]"
-                  />
-                </div>
-
-                {/* Sort Selector */}
-                <div className="flex items-center gap-1">
-                  <select 
-                    value={sortBy} 
-                    onChange={(e) => setSortBy(e.target.value as any)}
-                    className="bg-white border-2 border-black p-2 text-xs font-black uppercase tracking-widest focus:outline-none focus:bg-[#D4FF00]"
-                  >
-                    <option value="default">SORT: DEFAULT</option>
-                    <option value="price-asc">PRICE: LOW TO HIGH</option>
-                    <option value="price-desc">PRICE: HIGH TO LOW</option>
-                    <option value="year-desc">YEAR: NEWEST FIRST</option>
-                    <option value="year-asc">YEAR: OLDEST FIRST</option>
-                    <option value="player-asc">PLAYER: A TO Z</option>
-                  </select>
-                </div>
-
-                {/* Team */}
-                <select 
-                  value={filterTeam} 
-                  onChange={(e) => setFilterTeam(e.target.value)}
-                  className="bg-white border-2 border-black p-2 text-xs font-black uppercase tracking-widest focus:outline-none focus:bg-[#D4FF00]"
-                >
-                  <option value="">ALL TEAMS</option>
-                  {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-
-                {/* Position */}
-                <select 
-                  value={filterPosition} 
-                  onChange={(e) => setFilterPosition(e.target.value)}
-                  className="bg-white border-2 border-black p-2 text-xs font-black uppercase tracking-widest focus:outline-none focus:bg-[#D4FF00]"
-                >
-                  <option value="">ALL POSITIONS</option>
-                  {uniquePositions.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-
-                {/* Rarity */}
-                <select 
-                  value={filterRarity} 
-                  onChange={(e) => setFilterRarity(e.target.value)}
-                  className="bg-white border-2 border-black p-2 text-xs font-black uppercase tracking-widest focus:outline-none focus:bg-[#D4FF00]"
-                >
-                  <option value="">ALL RARITIES</option>
-                  {uniqueRarities.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-
-                {/* Edition */}
-                <select 
-                  value={filterEdition} 
-                  onChange={(e) => setFilterEdition(e.target.value)}
-                  className="bg-white border-2 border-black p-2 text-xs font-black uppercase tracking-widest focus:outline-none focus:bg-[#D4FF00]"
-                >
-                  <option value="">ALL EDITIONS</option>
-                  {uniqueEditions.map(e => <option key={e} value={e}>{e}</option>)}
-                </select>
-
-                {/* Clear / Reset Filter button */}
                 {hasActiveFilters && (
                   <button
                     onClick={handleResetFilters}
-                    className="flex items-center gap-1 bg-black text-[#D4FF00] border-2 border-black px-3 py-2 text-xs font-black uppercase tracking-widest hover:bg-neutral-800 transition-colors"
+                    className="shrink-0 flex items-center gap-1 bg-red-600 text-white border-2 border-black px-2.5 py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider hover:bg-red-700 transition-colors ml-auto"
                   >
-                    <X size={14} /> RESET FILTERS
+                    <X size={12} /> RESET
                   </button>
                 )}
               </div>
+
+              {/* Advanced Filter Tray */}
+              <AnimatePresence>
+                {isFilterTrayOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="bg-neutral-50 border-2 border-black p-3.5 sm:p-4 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] space-y-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3">
+                        {/* Sort Selector */}
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="text-[9px] font-black text-neutral-500 uppercase tracking-widest block mb-1">Sort Order</label>
+                          <select 
+                            value={sortBy} 
+                            onChange={(e) => setSortBy(e.target.value as any)}
+                            className="w-full bg-white border-2 border-black p-1.5 sm:p-2 text-xs font-black uppercase tracking-wider focus:outline-none focus:bg-[#D4FF00]"
+                          >
+                            <option value="default">DEFAULT</option>
+                            <option value="price-asc">PRICE: LOW TO HIGH</option>
+                            <option value="price-desc">PRICE: HIGH TO LOW</option>
+                            <option value="year-desc">YEAR: NEWEST</option>
+                            <option value="year-asc">YEAR: OLDEST</option>
+                            <option value="player-asc">PLAYER: A-Z</option>
+                          </select>
+                        </div>
+
+                        {/* Team */}
+                        <div>
+                          <label className="text-[9px] font-black text-neutral-500 uppercase tracking-widest block mb-1">Team</label>
+                          <select 
+                            value={filterTeam} 
+                            onChange={(e) => setFilterTeam(e.target.value)}
+                            className="w-full bg-white border-2 border-black p-1.5 sm:p-2 text-xs font-black uppercase tracking-wider focus:outline-none focus:bg-[#D4FF00]"
+                          >
+                            <option value="">ALL TEAMS</option>
+                            {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </div>
+
+                        {/* Position */}
+                        <div>
+                          <label className="text-[9px] font-black text-neutral-500 uppercase tracking-widest block mb-1">Position</label>
+                          <select 
+                            value={filterPosition} 
+                            onChange={(e) => setFilterPosition(e.target.value)}
+                            className="w-full bg-white border-2 border-black p-1.5 sm:p-2 text-xs font-black uppercase tracking-wider focus:outline-none focus:bg-[#D4FF00]"
+                          >
+                            <option value="">ALL POSITIONS</option>
+                            {uniquePositions.map(p => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </div>
+
+                        {/* Rarity */}
+                        <div>
+                          <label className="text-[9px] font-black text-neutral-500 uppercase tracking-widest block mb-1">Rarity</label>
+                          <select 
+                            value={filterRarity} 
+                            onChange={(e) => setFilterRarity(e.target.value)}
+                            className="w-full bg-white border-2 border-black p-1.5 sm:p-2 text-xs font-black uppercase tracking-wider focus:outline-none focus:bg-[#D4FF00]"
+                          >
+                            <option value="">ALL RARITIES</option>
+                            {uniqueRarities.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+
+                        {/* Edition */}
+                        <div>
+                          <label className="text-[9px] font-black text-neutral-500 uppercase tracking-widest block mb-1">Edition</label>
+                          <select 
+                            value={filterEdition} 
+                            onChange={(e) => setFilterEdition(e.target.value)}
+                            className="w-full bg-white border-2 border-black p-1.5 sm:p-2 text-xs font-black uppercase tracking-wider focus:outline-none focus:bg-[#D4FF00]"
+                          >
+                            <option value="">ALL EDITIONS</option>
+                            {uniqueEditions.map(e => <option key={e} value={e}>{e}</option>)}
+                          </select>
+                        </div>
+
+                        {/* Min / Max Price Inputs */}
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="text-[9px] font-black text-neutral-500 uppercase tracking-widest block mb-1">Custom ৳</label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              placeholder="MIN"
+                              value={minPrice}
+                              onChange={(e) => {
+                                setMinPrice(e.target.value);
+                                setPricePreset('all');
+                              }}
+                              className="w-1/2 bg-white border border-black p-1.5 text-xs font-black uppercase focus:outline-none focus:bg-[#D4FF00]"
+                            />
+                            <span className="text-xs font-bold text-neutral-400">-</span>
+                            <input
+                              type="number"
+                              placeholder="MAX"
+                              value={maxPrice}
+                              onChange={(e) => {
+                                setMaxPrice(e.target.value);
+                                setPricePreset('all');
+                              }}
+                              className="w-1/2 bg-white border border-black p-1.5 text-xs font-black uppercase focus:outline-none focus:bg-[#D4FF00]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {hasActiveFilters && (
+                        <div className="pt-1 flex justify-end">
+                          <button
+                            onClick={handleResetFilters}
+                            className="flex items-center gap-1 text-xs font-black text-red-600 hover:text-red-800 uppercase tracking-wider underline"
+                          >
+                            Clear all filters
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Tab Header Info */}
-            <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between border-b-2 border-black pb-4 gap-4">
+            <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-end justify-between border-b-2 border-black pb-3 sm:pb-4 gap-2 sm:gap-4">
               <div>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tighter text-black flex items-center gap-3">
+                <h1 className="text-2xl sm:text-4xl md:text-5xl font-black uppercase tracking-tighter text-black flex items-center gap-2 sm:gap-3">
                   {activeTab === 'database' && 'CARD DATABASE'}
                   {activeTab === 'vault' && (
                     <>
-                      <Trophy size={36} /> MY CARD VAULT (OWNED)
+                      <Trophy size={28} className="sm:w-9 sm:h-9" /> MY CARD VAULT
                     </>
                   )}
                   {activeTab === 'favorites' && (
                     <>
-                      <Heart size={36} className="text-red-500 fill-red-500" /> MY FAVORITES
+                      <Heart size={28} className="text-red-500 fill-red-500 sm:w-9 sm:h-9" /> MY FAVORITES
                     </>
                   )}
                 </h1>
-                <p className="text-neutral-500 mt-2 text-xs font-black uppercase tracking-widest">
+                <p className="text-neutral-500 mt-1 sm:mt-2 text-[10px] sm:text-xs font-black uppercase tracking-widest">
                   {activeTab === 'database' && `SHOWING ${sortedCards.length} OF ${cards.filter(c => !!c.imageUrl).length} CARDS`}
                   {activeTab === 'vault' && `YOU OWN ${vaultIds.size} CARDS IN YOUR VAULT VALUED AT ${formatCurrency(vaultValue)}.`}
                   {activeTab === 'favorites' && `YOU HAVE SAVED ${favoriteIds.size} FAVORITE CARDS.`}
@@ -925,43 +945,47 @@ export default function App() {
 
             {/* Grid */}
             {loadingCards ? (
-              <div className="flex justify-center py-32">
-                 <RefreshCw size={48} className="text-neutral-300 animate-spin" />
+              <div className="flex flex-col items-center justify-center py-24 sm:py-32 gap-3">
+                 <RefreshCw size={36} className="text-neutral-300 animate-spin" />
+                 <span className="text-xs font-black tracking-widest uppercase text-neutral-400">Loading cards...</span>
               </div>
             ) : sortedCards.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 md:gap-8">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5 sm:gap-4 md:gap-6">
                 {sortedCards.map(card => (
                   <CardItem 
                     key={card.id} 
                     card={card} 
                     inVault={vaultIds.has(card.id)}
                     isFavorite={favoriteIds.has(card.id)}
-                    onToggleFavorite={(e, id) => handleToggleFavorite(id)}
+                    onToggleFavorite={(e) => {
+                      e.stopPropagation();
+                      handleToggleFavorite(card.id);
+                    }}
                     onClick={(c) => handleSelectCard(c)} 
                   />
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-32 text-center border-2 border-black bg-neutral-100 p-6">
+              <div className="flex flex-col items-center justify-center py-20 sm:py-28 text-center border-2 border-black bg-neutral-100 p-6 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
                 {activeTab === 'vault' ? (
                   <>
-                    <Trophy size={48} className="text-black mb-6" />
-                    <h3 className="text-2xl font-black text-black mb-4 uppercase tracking-widest">YOUR VAULT IS EMPTY</h3>
+                    <Trophy size={40} className="text-black mb-4" />
+                    <h3 className="text-xl sm:text-2xl font-black text-black mb-2 uppercase tracking-widest">YOUR VAULT IS EMPTY</h3>
                     <p className="text-neutral-500 max-w-md text-xs font-black uppercase tracking-widest mb-6">
                       {user 
                         ? "YOU HAVEN'T PURCHASED OR DRAWN ANY CARDS YET. BUY FROM THE DATABASE OR OPEN BOOSTER PACKS TO FILL YOUR VAULT." 
                         : "PLEASE SIGN IN TO VIEW YOUR CARD VAULT."}
                     </p>
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap justify-center gap-3">
                       <button
                         onClick={() => switchTab('shop')}
-                        className="bg-[#D4FF00] text-black border-2 border-black px-6 py-3 font-black text-xs uppercase tracking-widest hover:bg-black hover:text-[#D4FF00] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                        className="bg-[#D4FF00] text-black border-2 border-black px-5 py-2.5 font-black text-xs uppercase tracking-widest hover:bg-black hover:text-[#D4FF00] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
                       >
                         OPEN PACKS
                       </button>
                       <button
                         onClick={() => switchTab('database')}
-                        className="bg-black text-[#D4FF00] border-2 border-black px-6 py-3 font-black text-xs uppercase tracking-widest hover:bg-neutral-800 shadow-[4px_4px_0px_0px_#D4FF00]"
+                        className="bg-black text-[#D4FF00] border-2 border-black px-5 py-2.5 font-black text-xs uppercase tracking-widest hover:bg-neutral-800 shadow-[3px_3px_0px_0px_#D4FF00]"
                       >
                         BROWSE DATABASE
                       </button>
@@ -969,29 +993,29 @@ export default function App() {
                   </>
                 ) : activeTab === 'favorites' ? (
                   <>
-                    <Heart size={48} className="text-red-500 mb-6" />
-                    <h3 className="text-2xl font-black text-black mb-4 uppercase tracking-widest">NO FAVORITES SAVED</h3>
+                    <Heart size={40} className="text-red-500 mb-4" />
+                    <h3 className="text-xl sm:text-2xl font-black text-black mb-2 uppercase tracking-widest">NO FAVORITES SAVED</h3>
                     <p className="text-neutral-500 max-w-md text-xs font-black uppercase tracking-widest mb-6">
                       CLICK THE HEART ICON ON ANY CARD TO SAVE IT TO YOUR FAVORITES WISHLIST.
                     </p>
                     <button
                       onClick={() => switchTab('database')}
-                      className="bg-black text-white hover:bg-[#D4FF00] hover:text-black border-2 border-black px-6 py-3 font-black text-xs uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                      className="bg-black text-white hover:bg-[#D4FF00] hover:text-black border-2 border-black px-5 py-2.5 font-black text-xs uppercase tracking-widest shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
                     >
                       BROWSE CARDS
                     </button>
                   </>
                 ) : (
                   <>
-                    <WalletCards size={48} className="text-black mb-6" />
-                    <h3 className="text-2xl font-black text-black mb-4 uppercase tracking-widest">NO CARDS FOUND</h3>
+                    <WalletCards size={40} className="text-black mb-4" />
+                    <h3 className="text-xl sm:text-2xl font-black text-black mb-2 uppercase tracking-widest">NO CARDS FOUND</h3>
                     <p className="text-neutral-500 max-w-md text-xs font-black uppercase tracking-widest mb-6">
                       NO CARDS MATCH YOUR CURRENT SEARCH OR PRICE CRITERIA.
                     </p>
                     {hasActiveFilters && (
                       <button
                         onClick={handleResetFilters}
-                        className="bg-black text-[#D4FF00] border-2 border-black px-6 py-3 font-black text-xs uppercase tracking-widest hover:bg-neutral-800 shadow-[4px_4px_0px_0px_#D4FF00]"
+                        className="bg-black text-[#D4FF00] border-2 border-black px-5 py-2.5 font-black text-xs uppercase tracking-widest hover:bg-neutral-800 shadow-[3px_3px_0px_0px_#D4FF00]"
                       >
                         CLEAR ALL FILTERS
                       </button>
@@ -1004,23 +1028,262 @@ export default function App() {
         )}
       </main>
 
-      {/* Bottom Status Bar */}
-      <footer className="h-14 shrink-0 bg-white border-t-2 border-black flex items-center justify-between px-8 text-[10px] uppercase font-black tracking-widest text-neutral-600">
-        <div className="flex gap-8">
-          <span className="flex items-center gap-2"><div className="w-2 h-2 bg-[#D4FF00] border border-black"></div> MARKET ONLINE</span>
-          <span>INDEX: <span className="text-black font-bold">+1.2%</span></span>
-        </div>
-        <div className="hidden sm:block">© 2024 ARTCARD COLLECTIVE • SECURE NODE #1192-A</div>
-      </footer>
+      {/* Floating Bottom Navigation Dock (Optimized for Phones & Tablets) */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t-2 border-black shadow-[0_-4px_12px_rgba(0,0,0,0.1)]">
+        <div className="grid grid-cols-5 h-16 max-w-md mx-auto px-1">
+          {/* Database */}
+          <button
+            onClick={() => switchTab('database')}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+              activeTab === 'database' && !selectedCard ? 'text-black font-black' : 'text-neutral-500 font-bold hover:text-black'
+            }`}
+          >
+            <div className={`p-1 rounded ${activeTab === 'database' && !selectedCard ? 'bg-[#D4FF00] border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' : ''}`}>
+              <Grid3X3 size={17} />
+            </div>
+            <span className="text-[9px] uppercase tracking-wider leading-none">CARDS</span>
+          </button>
 
-      {/* Toast Notification */}
+          {/* Market */}
+          <button
+            onClick={() => switchTab('marketplace')}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+              activeTab === 'marketplace' && !selectedCard ? 'text-black font-black' : 'text-neutral-500 font-bold hover:text-black'
+            }`}
+          >
+            <div className={`p-1 rounded ${activeTab === 'marketplace' && !selectedCard ? 'bg-[#D4FF00] border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' : ''}`}>
+              <ShoppingCart size={17} />
+            </div>
+            <span className="text-[9px] uppercase tracking-wider leading-none">MARKET</span>
+          </button>
+
+          {/* Vault */}
+          <button
+            onClick={() => switchTab('vault')}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors relative ${
+              activeTab === 'vault' && !selectedCard ? 'text-black font-black' : 'text-neutral-500 font-bold hover:text-black'
+            }`}
+          >
+            <div className={`p-1 rounded ${activeTab === 'vault' && !selectedCard ? 'bg-[#D4FF00] border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' : ''}`}>
+              <Trophy size={17} />
+            </div>
+            <span className="text-[9px] uppercase tracking-wider leading-none">VAULT</span>
+            {vaultIds.size > 0 && (
+              <span className="absolute top-1 right-3 bg-black text-[#D4FF00] text-[8px] font-black px-1 rounded-full border border-black">
+                {vaultIds.size}
+              </span>
+            )}
+          </button>
+
+          {/* Leaderboard */}
+          <button
+            onClick={() => switchTab('leaderboard')}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+              activeTab === 'leaderboard' && !selectedCard ? 'text-black font-black' : 'text-neutral-500 font-bold hover:text-black'
+            }`}
+          >
+            <div className={`p-1 rounded ${activeTab === 'leaderboard' && !selectedCard ? 'bg-[#D4FF00] border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' : ''}`}>
+              <Medal size={17} />
+            </div>
+            <span className="text-[9px] uppercase tracking-wider leading-none">RANKS</span>
+          </button>
+
+          {/* More Menu */}
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors relative ${
+              isMobileMenuOpen || ['shop', 'custom', 'favorites', 'profile', 'admin', 'manage'].includes(activeTab)
+                ? 'text-black font-black'
+                : 'text-neutral-500 font-bold hover:text-black'
+            }`}
+          >
+            <div className={`p-1 rounded ${['shop', 'custom', 'favorites', 'profile', 'admin', 'manage'].includes(activeTab) && !selectedCard ? 'bg-[#D4FF00] border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' : ''}`}>
+              <Menu size={17} />
+            </div>
+            <span className="text-[9px] uppercase tracking-wider leading-none">MORE</span>
+            {favoriteIds.size > 0 && (
+              <span className="absolute top-1.5 right-3.5 w-2 h-2 bg-red-500 rounded-full" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Slide-Up Mobile Navigation Drawer Modal */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-50 flex flex-col justify-end lg:hidden">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            {/* Slide-up Sheet */}
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="relative bg-white border-t-4 border-black p-5 max-h-[85vh] overflow-y-auto rounded-t-2xl shadow-2xl z-10 space-y-4"
+            >
+              {/* Sheet Header */}
+              <div className="flex items-center justify-between border-b-2 border-black pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-black text-[#D4FF00] border border-black flex items-center justify-center font-black text-xs">
+                    AC
+                  </div>
+                  <span className="text-sm font-black tracking-tight uppercase">NAVIGATION MENU</span>
+                </div>
+                <button
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-1 border border-black bg-neutral-100 hover:bg-black hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* User Account Quick Card */}
+              <div className="bg-neutral-100 border-2 border-black p-3 flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] font-black uppercase text-neutral-500 tracking-widest block">Logged in as</span>
+                  <span className="text-xs font-black uppercase text-black truncate max-w-[170px] block">
+                    {user ? (user.displayName || user.email) : 'GUEST COLLECTOR'}
+                  </span>
+                  <span className="text-xs font-black text-[#556b00] mt-0.5 block">
+                    {user ? formatCurrency(walletBalance) : '৳ 0.00'} ARTCOIN
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    if (user) {
+                      setIsWalletOpen(true);
+                    } else {
+                      switchTab('profile');
+                    }
+                  }}
+                  className="bg-[#D4FF00] text-black border border-black px-2.5 py-1.5 text-[10px] font-black uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                >
+                  {user ? '+ TOP UP' : 'SIGN IN'}
+                </button>
+              </div>
+
+              {/* Navigation Grid of Options */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => switchTab('database')}
+                  className={`p-2.5 border-2 border-black text-left font-black text-xs uppercase flex items-center gap-2 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+                    activeTab === 'database' ? 'bg-black text-[#D4FF00]' : 'bg-white hover:bg-neutral-50'
+                  }`}
+                >
+                  <Grid3X3 size={15} /> DATABASE
+                </button>
+
+                <button
+                  onClick={() => switchTab('marketplace')}
+                  className={`p-2.5 border-2 border-black text-left font-black text-xs uppercase flex items-center gap-2 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+                    activeTab === 'marketplace' ? 'bg-black text-[#D4FF00]' : 'bg-white hover:bg-neutral-50'
+                  }`}
+                >
+                  <ShoppingCart size={15} /> MARKETPLACE
+                </button>
+
+                <button
+                  onClick={() => switchTab('vault')}
+                  className={`p-2.5 border-2 border-black text-left font-black text-xs uppercase flex items-center gap-2 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+                    activeTab === 'vault' ? 'bg-black text-[#D4FF00]' : 'bg-white hover:bg-neutral-50'
+                  }`}
+                >
+                  <Trophy size={15} /> VAULT ({vaultIds.size})
+                </button>
+
+                <button
+                  onClick={() => switchTab('leaderboard')}
+                  className={`p-2.5 border-2 border-black text-left font-black text-xs uppercase flex items-center gap-2 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+                    activeTab === 'leaderboard' ? 'bg-black text-[#D4FF00]' : 'bg-white hover:bg-neutral-50'
+                  }`}
+                >
+                  <Medal size={15} /> LEADERBOARD
+                </button>
+
+                <button
+                  onClick={() => switchTab('shop')}
+                  className={`p-2.5 border-2 border-black text-left font-black text-xs uppercase flex items-center gap-2 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+                    activeTab === 'shop' ? 'bg-black text-[#D4FF00]' : 'bg-white hover:bg-neutral-50'
+                  }`}
+                >
+                  <Sparkles size={15} /> PACK SHOP
+                </button>
+
+                <button
+                  onClick={() => switchTab('favorites')}
+                  className={`p-2.5 border-2 border-black text-left font-black text-xs uppercase flex items-center gap-2 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+                    activeTab === 'favorites' ? 'bg-black text-[#D4FF00]' : 'bg-white hover:bg-neutral-50'
+                  }`}
+                >
+                  <Heart size={15} className="text-red-500 fill-red-500" /> FAVS ({favoriteIds.size})
+                </button>
+
+                <button
+                  onClick={() => switchTab('custom')}
+                  className={`p-2.5 border-2 border-black text-left font-black text-xs uppercase flex items-center gap-2 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+                    activeTab === 'custom' ? 'bg-black text-[#D4FF00]' : 'bg-white hover:bg-neutral-50'
+                  }`}
+                >
+                  <Palette size={15} /> CUSTOM CARD
+                </button>
+
+                <button
+                  onClick={() => switchTab('profile')}
+                  className={`p-2.5 border-2 border-black text-left font-black text-xs uppercase flex items-center gap-2 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+                    activeTab === 'profile' ? 'bg-black text-[#D4FF00]' : 'bg-white hover:bg-neutral-50'
+                  }`}
+                >
+                  <Users size={15} /> MY PROFILE
+                </button>
+              </div>
+
+              {/* Admin Section in Mobile Drawer */}
+              {isAdminUser && (
+                <div className="pt-2 border-t-2 border-black space-y-2">
+                  <span className="text-[9px] font-black uppercase text-neutral-500 tracking-widest block">ADMIN TOOLS</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => switchTab('admin')}
+                      className={`p-2.5 border-2 border-black text-left font-black text-xs uppercase flex items-center gap-1.5 ${
+                        activeTab === 'admin' ? 'bg-[#D4FF00] text-black' : 'bg-neutral-100 text-black'
+                      }`}
+                    >
+                      <Plus size={14} /> ADD CARD
+                    </button>
+                    <button
+                      onClick={() => switchTab('manage')}
+                      className={`p-2.5 border-2 border-black text-left font-black text-xs uppercase flex items-center gap-1.5 ${
+                        activeTab === 'manage' ? 'bg-[#D4FF00] text-black' : 'bg-neutral-100 text-black'
+                      }`}
+                    >
+                      <Layers size={14} /> MANAGE SHOP
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-black text-white px-6 py-3 font-black text-sm tracking-widest uppercase border-2 border-[#D4FF00] shadow-[4px_4px_0px_0px_#D4FF00] animate-in slide-in-from-bottom-5 fade-in duration-300">
-          {toastMessage}
+        <div className="fixed bottom-20 lg:bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-50 bg-black text-[#D4FF00] border-2 border-[#D4FF00] px-4 py-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center gap-2 text-xs font-black uppercase tracking-wider animate-bounce">
+          <Sparkles size={16} />
+          <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Wallet Top-Up Modal */}
+      {/* Global Wallet Top-Up & Management Modal */}
       <WalletModal
         isOpen={isWalletOpen}
         onClose={() => setIsWalletOpen(false)}
