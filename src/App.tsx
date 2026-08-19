@@ -300,6 +300,23 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (hash.startsWith('user-')) {
+        const uid = hash.replace('user-', '');
+        if (uid) setViewingUserId(uid);
+      } else if (['database', 'marketplace', 'vault', 'leaderboard', 'shop', 'custom', 'favorites', 'profile', 'admin', 'manage'].includes(hash)) {
+        setActiveTab(hash as any);
+        setSelectedCard(null);
+      }
+    };
+
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
   const handleSelectCard = (card: FootballCard) => {
     setSelectedCard(card);
   };
@@ -308,12 +325,22 @@ export default function App() {
     setSelectedCard(null);
     setIsMobileMenuOpen(false);
     setIsDesktopMoreOpen(false);
-    if (tab === 'collection') {
-      setActiveTab('vault');
-    } else {
-      setActiveTab(tab as any);
-    }
+    const target = tab === 'collection' ? 'vault' : tab;
+    setActiveTab(target as any);
+    window.location.hash = `#${target}`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleOpenUserProfile = (userId: string) => {
+    setViewingUserId(userId);
+    window.location.hash = `#user-${userId}`;
+  };
+
+  const handleCloseUserProfile = () => {
+    setViewingUserId(null);
+    if (window.location.hash.startsWith('#user-')) {
+      window.location.hash = `#${activeTab}`;
+    }
   };
 
   const handleResetFilters = () => {
@@ -662,7 +689,7 @@ export default function App() {
             onOpenWallet={() => setIsWalletOpen(true)}
             onOpenAuth={() => switchTab('profile')}
             onSelectCard={handleSelectCard}
-            onViewUserProfile={(uid) => setViewingUserId(uid)}
+            onViewUserProfile={handleOpenUserProfile}
             onToast={(msg) => setToastMessage(msg)}
           />
         ) : activeTab === 'leaderboard' ? (
@@ -673,7 +700,7 @@ export default function App() {
             vaultIds={vaultIds}
             onOpenWallet={() => setIsWalletOpen(true)}
             onOpenAuth={() => switchTab('profile')}
-            onViewUserProfile={(uid) => setViewingUserId(uid)}
+            onViewUserProfile={handleOpenUserProfile}
             onSelectCard={handleSelectCard}
             onToast={(msg) => setToastMessage(msg)}
           />
@@ -1294,10 +1321,11 @@ export default function App() {
       {/* Public Profile View Modal */}
       <PublicProfileModal
         userId={viewingUserId}
-        onClose={() => setViewingUserId(null)}
+        onClose={handleCloseUserProfile}
         allCards={cards}
         currentUserId={user?.uid}
         onSelectCard={handleSelectCard}
+        onToast={(msg) => setToastMessage(msg)}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FootballCard, UserProfileData } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
+import { toggleFollowUser } from '../lib/social';
 import { 
   db, 
   collection, 
@@ -28,7 +29,13 @@ import {
   TrendingUp, 
   User as UserIcon,
   ExternalLink,
-  Target
+  Target,
+  Search,
+  UserPlus,
+  UserCheck,
+  Users,
+  Share2,
+  X
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -51,6 +58,9 @@ interface RankedUser {
   photoURL?: string;
   customAvatar?: string;
   favoriteTeam?: string;
+  bio?: string;
+  followers?: string[];
+  following?: string[];
   vaultCardsCount: number;
   portfolioValue: number;
   shieldCount: number;
@@ -70,11 +80,13 @@ export function LeaderboardAndEvents({
   onToast
 }: LeaderboardAndEventsProps) {
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'events'>('leaderboard');
-  const [leaderboardCategory, setLeaderboardCategory] = useState<'value' | 'cards' | 'grails'>('value');
+  const [leaderboardCategory, setLeaderboardCategory] = useState<'value' | 'cards' | 'grails' | 'following'>('value');
+  const [searchQuery, setSearchQuery] = useState('');
   const [allUsersData, setAllUsersData] = useState<RankedUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [claimedEvents, setClaimedEvents] = useState<Set<string>>(new Set());
   const [isClaiming, setIsClaiming] = useState<string | null>(null);
+  const [followPendingId, setFollowPendingId] = useState<string | null>(null);
 
   // Load community users from Firestore in real-time
   useEffect(() => {
@@ -115,6 +127,9 @@ export function LeaderboardAndEvents({
           photoURL: data.photoURL,
           customAvatar: data.customAvatar,
           favoriteTeam: data.favoriteTeam,
+          bio: data.bio,
+          followers: Array.isArray(data.followers) ? data.followers : [],
+          following: Array.isArray(data.following) ? data.following : [],
           vaultCardsCount: uVaultIds.length,
           portfolioValue: value,
           shieldCount: shields,
@@ -133,15 +148,54 @@ export function LeaderboardAndEvents({
     return () => unsubscribe();
   }, [allCards, user]);
 
-  // Sort leaderboard list
-  const sortedUsers = [...allUsersData].sort((a, b) => {
-    if (leaderboardCategory === 'value') return b.portfolioValue - a.portfolioValue;
-    if (leaderboardCategory === 'cards') return b.vaultCardsCount - a.vaultCardsCount;
-    return (b.shieldCount * 5 + b.goldCount) - (a.shieldCount * 5 + a.goldCount);
+  const currentUserData = allUsersData.find(u => user && u.uid === user.uid);
+  const myFollowingSet = new Set(currentUserData?.following || []);
+
+  const handleToggleFollow = async (e: React.MouseEvent, targetUserId: string, targetName: string) => {
+    e.stopPropagation();
+    if (!user) {
+      onOpenAuth();
+      return;
+    }
+    if (user.uid === targetUserId) return;
+
+    try {
+      setFollowPendingId(targetUserId);
+      const isNowFollowing = await toggleFollowUser(user.uid, targetUserId);
+      onToast(isNowFollowing ? `Now following ${targetName}!` : `Unfollowed ${targetName}`);
+    } catch (err) {
+      console.error("Follow toggle error:", err);
+      onToast("Failed to update follow status.");
+    } finally {
+      setFollowPendingId(null);
+    }
+  };
+
+  // Filter and sort users
+  const filteredUsers = allUsersData.filter(u => {
+    if (leaderboardCategory === 'following') {
+      if (!myFollowingSet.has(u.uid)) return false;
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchName = u.displayName.toLowerCase().includes(q);
+      const matchEmail = (u.email || '').toLowerCase().includes(q);
+      const matchTeam = (u.favoriteTeam || '').toLowerCase().includes(q);
+      const matchBio = (u.bio || '').toLowerCase().includes(q);
+      return matchName || matchEmail || matchTeam || matchBio;
+    }
+    return true;
   });
 
-  const top3 = sortedUsers.slice(0, 3);
-  const remainingRankings = sortedUsers.slice(3);
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    if (leaderboardCategory === 'cards') return b.vaultCardsCount - a.vaultCardsCount;
+    if (leaderboardCategory === 'grails') return (b.shieldCount * 5 + b.goldCount) - (a.shieldCount * 5 + a.goldCount);
+    return b.portfolioValue - a.portfolioValue;
+  });
+
+  const top3 = searchQuery.trim() || leaderboardCategory === 'following' ? [] : sortedUsers.slice(0, 3);
+  const tableUsers = searchQuery.trim() || leaderboardCategory === 'following' ? sortedUsers : sortedUsers.slice(3);
 
   // User's own cards in vault
   const userVaultCards = allCards.filter(c => vaultIds.has(c.id));
@@ -282,73 +336,113 @@ export function LeaderboardAndEvents({
         </div>
       </div>
 
-      {/* Main Tab Switches */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b-2 border-black pb-4">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setActiveTab('leaderboard')}
-            className={cn(
-              "px-6 py-3 text-xs sm:text-sm font-black uppercase tracking-widest border-2 border-black transition-all flex items-center gap-2",
-              activeTab === 'leaderboard'
-                ? "bg-black text-[#D4FF00] shadow-[4px_4px_0px_0px_#D4FF00]"
-                : "bg-white text-black hover:bg-neutral-100 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
-            )}
-          >
-            <Trophy size={16} />
-            COLLECTOR LEADERBOARD ({sortedUsers.length})
-          </button>
+      {/* Main Tab Switches & Search Bar */}
+      <div className="space-y-4 border-b-2 border-black pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setActiveTab('leaderboard')}
+              className={cn(
+                "px-5 py-2.5 text-xs sm:text-sm font-black uppercase tracking-widest border-2 border-black transition-all flex items-center gap-2",
+                activeTab === 'leaderboard'
+                  ? "bg-black text-[#D4FF00] shadow-[4px_4px_0px_0px_#D4FF00]"
+                  : "bg-white text-black hover:bg-neutral-100 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+              )}
+            >
+              <Trophy size={16} />
+              COLLECTORS & SEARCH ({sortedUsers.length})
+            </button>
 
-          <button
-            onClick={() => setActiveTab('events')}
-            className={cn(
-              "px-6 py-3 text-xs sm:text-sm font-black uppercase tracking-widest border-2 border-black transition-all flex items-center gap-2",
-              activeTab === 'events'
-                ? "bg-[#D4FF00] text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-                : "bg-white text-black hover:bg-neutral-100 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
-            )}
-          >
-            <Sparkles size={16} />
-            LIVE COMMUNITY EVENTS ({eventsList.length})
-          </button>
+            <button
+              onClick={() => setActiveTab('events')}
+              className={cn(
+                "px-5 py-2.5 text-xs sm:text-sm font-black uppercase tracking-widest border-2 border-black transition-all flex items-center gap-2",
+                activeTab === 'events'
+                  ? "bg-[#D4FF00] text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                  : "bg-white text-black hover:bg-neutral-100 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+              )}
+            >
+              <Sparkles size={16} />
+              LIVE EVENTS ({eventsList.length})
+            </button>
+          </div>
+
+          {activeTab === 'leaderboard' && (
+            <div className="flex flex-wrap items-center gap-1.5 bg-neutral-100 border-2 border-black p-1">
+              <button
+                onClick={() => setLeaderboardCategory('value')}
+                className={cn(
+                  "px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-colors",
+                  leaderboardCategory === 'value' ? "bg-black text-[#D4FF00]" : "text-neutral-700 hover:text-black"
+                )}
+              >
+                PORTFOLIO VALUE
+              </button>
+              <button
+                onClick={() => setLeaderboardCategory('cards')}
+                className={cn(
+                  "px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-colors",
+                  leaderboardCategory === 'cards' ? "bg-black text-[#D4FF00]" : "text-neutral-700 hover:text-black"
+                )}
+              >
+                CARDS OWNED
+              </button>
+              <button
+                onClick={() => setLeaderboardCategory('grails')}
+                className={cn(
+                  "px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-colors",
+                  leaderboardCategory === 'grails' ? "bg-black text-[#D4FF00]" : "text-neutral-700 hover:text-black"
+                )}
+              >
+                1-OF-1 GRAILS
+              </button>
+              {user && (
+                <button
+                  onClick={() => setLeaderboardCategory('following')}
+                  className={cn(
+                    "px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-colors flex items-center gap-1",
+                    leaderboardCategory === 'following' ? "bg-black text-[#D4FF00]" : "text-neutral-700 hover:text-black"
+                  )}
+                >
+                  <Users size={12} />
+                  MY FOLLOWING ({myFollowingSet.size})
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
+        {/* Search Bar for Collectors */}
         {activeTab === 'leaderboard' && (
-          <div className="flex items-center gap-1.5 bg-neutral-100 border-2 border-black p-1">
-            <button
-              onClick={() => setLeaderboardCategory('value')}
-              className={cn(
-                "px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-colors",
-                leaderboardCategory === 'value' ? "bg-black text-[#D4FF00]" : "text-neutral-700 hover:text-black"
-              )}
-            >
-              PORTFOLIO VALUE
-            </button>
-            <button
-              onClick={() => setLeaderboardCategory('cards')}
-              className={cn(
-                "px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-colors",
-                leaderboardCategory === 'cards' ? "bg-black text-[#D4FF00]" : "text-neutral-700 hover:text-black"
-              )}
-            >
-              CARDS OWNED
-            </button>
-            <button
-              onClick={() => setLeaderboardCategory('grails')}
-              className={cn(
-                "px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-colors",
-                leaderboardCategory === 'grails' ? "bg-black text-[#D4FF00]" : "text-neutral-700 hover:text-black"
-              )}
-            >
-              1-OF-1 GRAILS
-            </button>
+          <div className="bg-white border-2 border-black p-2 flex items-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+            <Search size={18} className="text-neutral-500 shrink-0 ml-2" />
+            <input
+              type="text"
+              placeholder="SEARCH COLLECTORS BY NAME, EMAIL, FAVORITE CLUB, OR BIO..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-transparent text-xs font-black uppercase tracking-wider text-black placeholder:text-neutral-400 focus:outline-none"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="bg-neutral-200 hover:bg-neutral-300 p-1 border border-black text-black"
+                title="Clear Search"
+              >
+                <X size={14} />
+              </button>
+            )}
+            <span className="text-[10px] font-mono font-bold text-neutral-500 whitespace-nowrap pr-2">
+              {sortedUsers.length} FOUND
+            </span>
           </div>
         )}
       </div>
 
-      {/* View 1: Leaderboard */}
+      {/* View 1: Leaderboard & User Directory */}
       {activeTab === 'leaderboard' && (
         <div className="space-y-8">
-          {/* Top 3 Podium Cards */}
+          {/* Top 3 Podium Cards (Shown only when not searching or filtering by following) */}
           {top3.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
               {/* 2nd Place (Silver) */}
@@ -356,7 +450,7 @@ export function LeaderboardAndEvents({
                 <motion.div
                   whileHover={{ y: -4 }}
                   onClick={() => onViewUserProfile(top3[1].uid)}
-                  className="bg-white border-3 border-black p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between cursor-pointer order-2 md:order-1 relative overflow-hidden"
+                  className="bg-white border-3 border-black p-5 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between cursor-pointer order-2 md:order-1 relative overflow-hidden"
                 >
                   <div className="absolute top-0 right-0 bg-slate-300 text-black px-4 py-1 text-xs font-black uppercase border-b-2 border-l-2 border-black flex items-center gap-1">
                     🥈 RANK #2
@@ -382,15 +476,43 @@ export function LeaderboardAndEvents({
                           ⚽ {top3[1].favoriteTeam}
                         </p>
                       )}
+                      <p className="text-[9px] font-mono font-bold text-neutral-600">
+                        {top3[1].followers?.length || 0} FOLLOWERS
+                      </p>
                     </div>
+
+                    {user && user.uid !== top3[1].uid && (
+                      <div className="flex justify-center pt-1">
+                        <button
+                          onClick={(e) => handleToggleFollow(e, top3[1].uid, top3[1].displayName)}
+                          disabled={followPendingId === top3[1].uid}
+                          className={cn(
+                            "px-3 py-1 text-[10px] font-black uppercase tracking-wider border border-black flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors",
+                            myFollowingSet.has(top3[1].uid)
+                              ? "bg-neutral-100 hover:bg-red-100 text-black"
+                              : "bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black"
+                          )}
+                        >
+                          {myFollowingSet.has(top3[1].uid) ? (
+                            <>
+                              <UserCheck size={12} className="text-green-700" /> FOLLOWING
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus size={12} /> + FOLLOW
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="mt-6 pt-4 border-t-2 border-black/10 bg-neutral-50 -mx-6 -mb-6 p-4 text-center">
+                  <div className="mt-5 pt-3 border-t-2 border-black/10 bg-neutral-50 -mx-5 -mb-5 p-3.5 text-center">
                     <span className="text-[9px] font-black uppercase text-neutral-500 block">TOTAL VAULT VALUE</span>
                     <span className="text-xl font-black text-black font-mono">
                       {formatCurrency(top3[1].portfolioValue)}
                     </span>
-                    <div className="text-[9px] font-bold text-neutral-500 uppercase mt-1">
+                    <div className="text-[9px] font-bold text-neutral-500 uppercase mt-0.5">
                       {top3[1].vaultCardsCount} CARDS • {top3[1].shieldCount} SHIELDS
                     </div>
                   </div>
@@ -428,7 +550,35 @@ export function LeaderboardAndEvents({
                           ⚽ {top3[0].favoriteTeam}
                         </p>
                       )}
+                      <p className="text-[10px] font-mono font-bold text-[#D4FF00]">
+                        {top3[0].followers?.length || 0} FOLLOWERS
+                      </p>
                     </div>
+
+                    {user && user.uid !== top3[0].uid && (
+                      <div className="flex justify-center pt-1">
+                        <button
+                          onClick={(e) => handleToggleFollow(e, top3[0].uid, top3[0].displayName)}
+                          disabled={followPendingId === top3[0].uid}
+                          className={cn(
+                            "px-4 py-1.5 text-xs font-black uppercase tracking-wider border-2 border-black flex items-center gap-1 shadow-[2px_2px_0px_0px_#D4FF00] transition-colors",
+                            myFollowingSet.has(top3[0].uid)
+                              ? "bg-neutral-800 hover:bg-red-900 text-white"
+                              : "bg-[#D4FF00] hover:bg-white hover:text-black text-black"
+                          )}
+                        >
+                          {myFollowingSet.has(top3[0].uid) ? (
+                            <>
+                              <UserCheck size={14} className="text-[#D4FF00]" /> FOLLOWING
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus size={14} /> + FOLLOW
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-6 pt-4 border-t-2 border-neutral-800 bg-neutral-900 -mx-6 -mb-6 p-4 text-center">
@@ -448,7 +598,7 @@ export function LeaderboardAndEvents({
                 <motion.div
                   whileHover={{ y: -4 }}
                   onClick={() => onViewUserProfile(top3[2].uid)}
-                  className="bg-white border-3 border-black p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between cursor-pointer order-3 md:order-3 relative overflow-hidden"
+                  className="bg-white border-3 border-black p-5 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between cursor-pointer order-3 md:order-3 relative overflow-hidden"
                 >
                   <div className="absolute top-0 right-0 bg-amber-600 text-white px-4 py-1 text-xs font-black uppercase border-b-2 border-l-2 border-black flex items-center gap-1">
                     🥉 RANK #3
@@ -474,15 +624,43 @@ export function LeaderboardAndEvents({
                           ⚽ {top3[2].favoriteTeam}
                         </p>
                       )}
+                      <p className="text-[9px] font-mono font-bold text-neutral-600">
+                        {top3[2].followers?.length || 0} FOLLOWERS
+                      </p>
                     </div>
+
+                    {user && user.uid !== top3[2].uid && (
+                      <div className="flex justify-center pt-1">
+                        <button
+                          onClick={(e) => handleToggleFollow(e, top3[2].uid, top3[2].displayName)}
+                          disabled={followPendingId === top3[2].uid}
+                          className={cn(
+                            "px-3 py-1 text-[10px] font-black uppercase tracking-wider border border-black flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors",
+                            myFollowingSet.has(top3[2].uid)
+                              ? "bg-neutral-100 hover:bg-red-100 text-black"
+                              : "bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black"
+                          )}
+                        >
+                          {myFollowingSet.has(top3[2].uid) ? (
+                            <>
+                              <UserCheck size={12} className="text-green-700" /> FOLLOWING
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus size={12} /> + FOLLOW
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="mt-6 pt-4 border-t-2 border-black/10 bg-neutral-50 -mx-6 -mb-6 p-4 text-center">
+                  <div className="mt-5 pt-3 border-t-2 border-black/10 bg-neutral-50 -mx-5 -mb-5 p-3.5 text-center">
                     <span className="text-[9px] font-black uppercase text-neutral-500 block">TOTAL VAULT VALUE</span>
                     <span className="text-xl font-black text-black font-mono">
                       {formatCurrency(top3[2].portfolioValue)}
                     </span>
-                    <div className="text-[9px] font-bold text-neutral-500 uppercase mt-1">
+                    <div className="text-[9px] font-bold text-neutral-500 uppercase mt-0.5">
                       {top3[2].vaultCardsCount} CARDS • {top3[2].shieldCount} SHIELDS
                     </div>
                   </div>
@@ -491,14 +669,14 @@ export function LeaderboardAndEvents({
             </div>
           )}
 
-          {/* Full Leaderboard Table */}
+          {/* Full Leaderboard & Search Directory Table */}
           <div className="bg-white border-3 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-            <div className="p-4 bg-black text-white border-b-2 border-black flex items-center justify-between">
+            <div className="p-4 bg-black text-white border-b-2 border-black flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-black uppercase tracking-wider text-[#D4FF00]">
-                ALL COLLECTOR RANKINGS (CLICK ANY USER TO VIEW PUBLIC PROFILE)
+                {searchQuery.trim() ? `SEARCH RESULTS FOR "${searchQuery.toUpperCase()}"` : 'ALL COLLECTORS DIRECTORY'}
               </h3>
               <span className="text-[10px] font-mono text-neutral-400">
-                LIVE REAL-TIME SYNC
+                {sortedUsers.length} COLLECTORS LISTED
               </span>
             </div>
 
@@ -509,85 +687,122 @@ export function LeaderboardAndEvents({
                     <th className="p-3 text-center w-16">RANK</th>
                     <th className="p-3">COLLECTOR</th>
                     <th className="p-3">FAVORITE CLUB</th>
+                    <th className="p-3 text-center">FOLLOWERS</th>
                     <th className="p-3 text-center">VAULT CARDS</th>
                     <th className="p-3 text-center">1-OF-1 SHIELDS</th>
                     <th className="p-3 text-right">TOTAL VAULT VALUE</th>
-                    <th className="p-3 text-center w-24">PROFILE</th>
+                    <th className="p-3 text-center w-40">ACTION</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black/10 text-xs font-bold uppercase">
-                  {sortedUsers.map((u, idx) => {
-                    const isCurrentUser = user && u.uid === user.uid;
-                    return (
-                      <tr
-                        key={u.uid}
-                        onClick={() => onViewUserProfile(u.uid)}
-                        className={cn(
-                          "cursor-pointer transition-colors hover:bg-[#D4FF00]/15",
-                          isCurrentUser && "bg-[#D4FF00]/25 font-black"
-                        )}
-                      >
-                        <td className="p-3 text-center font-black font-mono">
-                          {idx === 0 ? '👑 #1' : idx === 1 ? '🥈 #2' : idx === 2 ? '🥉 #3' : `#${idx + 1}`}
-                        </td>
+                  {sortedUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-10 text-center text-neutral-500 font-black uppercase">
+                        No collectors match your search or filter criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    sortedUsers.map((u, idx) => {
+                      const isCurrentUser = user && u.uid === user.uid;
+                      const isFollowingThisUser = myFollowingSet.has(u.uid);
 
-                        <td className="p-3">
-                          <div className="flex items-center gap-3">
-                            {u.customAvatar || u.photoURL ? (
-                              <img src={u.customAvatar || u.photoURL} alt="Avatar" className="w-8 h-8 object-cover border border-black" />
-                            ) : (
-                              <div className="w-8 h-8 bg-neutral-200 border border-black flex items-center justify-center font-black text-black text-[10px]">
-                                <UserIcon size={14} />
-                              </div>
-                            )}
-                            <div>
-                              <div className="font-black text-black flex items-center gap-1.5">
-                                {u.displayName}
-                                {isCurrentUser && (
-                                  <span className="bg-black text-[#D4FF00] text-[8px] px-1 py-0.2">YOU</span>
-                                )}
-                              </div>
-                              {u.email && <div className="text-[9px] font-mono text-neutral-500 font-normal">{u.email}</div>}
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="p-3 text-neutral-700">
-                          {u.favoriteTeam ? `⚽ ${u.favoriteTeam}` : '—'}
-                        </td>
-
-                        <td className="p-3 text-center font-mono font-black">
-                          {u.vaultCardsCount}
-                        </td>
-
-                        <td className="p-3 text-center font-mono font-black text-amber-600">
-                          {u.shieldCount > 0 ? (
-                            <span className="inline-flex items-center gap-1 bg-amber-100 px-2 py-0.5 border border-amber-300">
-                              <Shield size={12} className="fill-amber-500" /> {u.shieldCount}
-                            </span>
-                          ) : (
-                            '0'
+                      return (
+                        <tr
+                          key={u.uid}
+                          onClick={() => onViewUserProfile(u.uid)}
+                          className={cn(
+                            "cursor-pointer transition-colors hover:bg-[#D4FF00]/15",
+                            isCurrentUser && "bg-[#D4FF00]/25 font-black"
                           )}
-                        </td>
+                        >
+                          <td className="p-3 text-center font-black font-mono">
+                            {idx === 0 ? '👑 #1' : idx === 1 ? '🥈 #2' : idx === 2 ? '🥉 #3' : `#${idx + 1}`}
+                          </td>
 
-                        <td className="p-3 text-right font-black font-mono text-black text-sm">
-                          {formatCurrency(u.portfolioValue)}
-                        </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-3">
+                              {u.customAvatar || u.photoURL ? (
+                                <img src={u.customAvatar || u.photoURL} alt="Avatar" className="w-8 h-8 object-cover border border-black shrink-0" />
+                              ) : (
+                                <div className="w-8 h-8 bg-neutral-200 border border-black flex items-center justify-center font-black text-black text-[10px] shrink-0">
+                                  <UserIcon size={14} />
+                                </div>
+                              )}
+                              <div>
+                                <div className="font-black text-black flex items-center gap-1.5">
+                                  {u.displayName}
+                                  {isCurrentUser && (
+                                    <span className="bg-black text-[#D4FF00] text-[8px] px-1 py-0.2">YOU</span>
+                                  )}
+                                </div>
+                                {u.email && <div className="text-[9px] font-mono text-neutral-500 font-normal">{u.email}</div>}
+                              </div>
+                            </div>
+                          </td>
 
-                        <td className="p-3 text-center">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onViewUserProfile(u.uid);
-                            }}
-                            className="bg-black text-white hover:bg-[#D4FF00] hover:text-black px-2.5 py-1 text-[9px] font-black uppercase border border-black transition-colors"
-                          >
-                            VIEW
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          <td className="p-3 text-neutral-700">
+                            {u.favoriteTeam ? `⚽ ${u.favoriteTeam}` : '—'}
+                          </td>
+
+                          <td className="p-3 text-center font-mono font-black text-neutral-600">
+                            {u.followers?.length || 0}
+                          </td>
+
+                          <td className="p-3 text-center font-mono font-black">
+                            {u.vaultCardsCount}
+                          </td>
+
+                          <td className="p-3 text-center font-mono font-black text-amber-600">
+                            {u.shieldCount > 0 ? (
+                              <span className="inline-flex items-center gap-1 bg-amber-100 px-2 py-0.5 border border-amber-300">
+                                <Shield size={12} className="fill-amber-500" /> {u.shieldCount}
+                              </span>
+                            ) : (
+                              '0'
+                            )}
+                          </td>
+
+                          <td className="p-3 text-right font-black font-mono text-black text-sm">
+                            {formatCurrency(u.portfolioValue)}
+                          </td>
+
+                          <td className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              {!isCurrentUser && (
+                                <button
+                                  onClick={(e) => handleToggleFollow(e, u.uid, u.displayName)}
+                                  disabled={followPendingId === u.uid}
+                                  className={cn(
+                                    "px-2 py-1 text-[9px] font-black uppercase border border-black transition-colors flex items-center gap-1",
+                                    isFollowingThisUser
+                                      ? "bg-neutral-100 hover:bg-red-100 text-black"
+                                      : "bg-[#D4FF00] hover:bg-black hover:text-[#D4FF00] text-black"
+                                  )}
+                                >
+                                  {isFollowingThisUser ? (
+                                    <>
+                                      <UserCheck size={11} className="text-green-700" /> FOLLOWING
+                                    </>
+                                  ) : (
+                                    <>
+                                      <UserPlus size={11} /> FOLLOW
+                                    </>
+                                  )}
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => onViewUserProfile(u.uid)}
+                                className="bg-black text-white hover:bg-[#D4FF00] hover:text-black px-2 py-1 text-[9px] font-black uppercase border border-black transition-colors"
+                              >
+                                VAULT
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>

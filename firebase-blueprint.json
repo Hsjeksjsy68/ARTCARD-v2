@@ -35,7 +35,9 @@
       "collectionIds": ["string"],
       "vaultIds": ["string"],
       "favoriteIds": ["string"],
-      "walletBalance": "number"
+      "walletBalance": "number",
+      "followers": ["string"],
+      "following": ["string"]
     }
   },
   "market_listings": {

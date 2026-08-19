@@ -77,6 +77,8 @@ export interface UserProfileData {
   vaultIds?: string[];
   favoriteIds?: string[];
   walletBalance?: number;
+  followers?: string[];
+  following?: string[];
 }
 
 export interface WalletTransaction {

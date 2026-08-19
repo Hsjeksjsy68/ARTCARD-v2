@@ -207,7 +207,9 @@ export function UserProfile({
   };
 
   const handleCopyProfileLink = () => {
-    navigator.clipboard.writeText(window.location.href);
+    if (!user) return;
+    const url = `${window.location.origin}${window.location.pathname}#user-${user.uid}`;
+    navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
@@ -317,6 +319,12 @@ export function UserProfile({
               )}
 
               <div className="flex flex-wrap items-center gap-3 pt-2 text-[10px] font-black uppercase tracking-widest text-neutral-600">
+                <span className="bg-neutral-100 border border-black px-2 py-1 flex items-center gap-1 font-mono text-black">
+                  <strong>{profileData?.followers?.length || 0}</strong> FOLLOWERS
+                </span>
+                <span className="bg-neutral-100 border border-black px-2 py-1 flex items-center gap-1 font-mono text-black">
+                  <strong>{profileData?.following?.length || 0}</strong> FOLLOWING
+                </span>
                 {profileData?.favoriteTeam && (
                   <span className="bg-neutral-100 border border-black px-2 py-1">
                     ⚽ CLUB: {profileData.favoriteTeam}
